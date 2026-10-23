@@ -1,0 +1,26 @@
+﻿# Secrets and environment variables
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Java / Spring Boot
+**/target/
+*.class
+
+# Node.js / React / Hardhat
+**/node_modules/
+**/dist/
+**/coverage/
+
+# Hardhat generated files
+contracts/artifacts/
+contracts/cache/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
