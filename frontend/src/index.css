@@ -1,0 +1,260 @@
+@import "tailwindcss";
+
+/*
+  ChainLance design tokens.
+  Warm ivory paper, near-black ink, one sharp chartreuse accent, thin deliberate rules.
+  No gradients, no glow: contrast, type and spacing carry the design.
+*/
+@theme {
+  --color-paper: #f4f0e6;
+  --color-paper-raised: #fbf9f3;
+  --color-stone: #e7e1d1;
+  --color-stone-deep: #d6cfba;
+  --color-warm-grey: #8b8576;
+  --color-mute: #5c584c; /* secondary text: 6:1 on paper */
+  --color-ink: #151512;
+  --color-ink-soft: #2a2924;
+  --color-lime: #c6f432;
+  --color-lime-deep: #aedb12;
+  --color-line: #d9d2bf;
+  --color-brick: #b2381f;
+  --color-ochre: #9a6200;
+
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* restrained corner radii */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+
+  --animate-rise: rise 0.5s ease-out both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-width: 320px;
+  }
+
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-ink);
+  }
+
+  /* One visible focus style everywhere; inverted on dark surfaces. */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  .on-ink :focus-visible {
+    outline-color: var(--color-lime);
+  }
+
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+   Motion. One choreographed hero, a layered diagram, scroll reveals, and lifted-layer hovers.
+   Everything below is switched off for people who ask for reduced motion (see the bottom of this block).
+   ------------------------------------------------------------------------------------------------------------------ */
+@keyframes layer-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--fx, 0px), 32px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes line-up {
+  from {
+    transform: translateY(108%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes ink-on {
+  from {
+    color: var(--color-paper);
+  }
+  to {
+    color: var(--color-ink);
+  }
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(198 244 50 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(198 244 50 / 0);
+  }
+}
+
+.hero-line {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+.hero-line > span {
+  display: block;
+  animation: line-up 0.95s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+.grow-x {
+  transform-origin: left center;
+  animation: grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+.grow-y {
+  transform-origin: center top;
+  animation: grow-y 0.6s ease-out both;
+  animation-delay: var(--d, 0s);
+}
+.layer-in {
+  animation: layer-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+.ink-on {
+  animation: ink-on 0.4s ease-out both;
+  animation-delay: var(--d, 0s);
+}
+.breathe {
+  animation: breathe 2.4s ease-out infinite;
+}
+
+/* Scroll reveal: hidden until Reveal adds .is-visible */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: var(--d, 0s);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Children enter one after another (stat rows, card grids) */
+.stagger > * {
+  /* `backwards`, not `both`: once finished, the animation lets go so hover transforms still work */
+  animation: layer-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0s; }
+.stagger > *:nth-child(2) { animation-delay: 0.07s; }
+.stagger > *:nth-child(3) { animation-delay: 0.14s; }
+.stagger > *:nth-child(4) { animation-delay: 0.21s; }
+.stagger > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger > *:nth-child(n + 6) { animation-delay: 0.35s; }
+
+/* Slow ticker */
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 42s linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+/* Parallax layers: the individual `translate` property leaves `transform` free for entrance animations. */
+.depth {
+  translate: calc(var(--mx, 0) * var(--z, 0) * 1px) calc(var(--my, 0) * var(--z, 0) * 1px);
+  transition: translate 0.25s ease-out;
+}
+
+/* A card or button that lifts off the page, leaving a solid layer underneath */
+.lift {
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.2s;
+}
+.lift:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 6px 6px 0 0 var(--color-lime);
+  border-color: var(--color-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .marquee-track,
+  .breathe {
+    animation: none;
+  }
+  .depth {
+    translate: none;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}
