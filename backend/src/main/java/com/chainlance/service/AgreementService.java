@@ -18,6 +18,7 @@ import com.chainlance.repository.ProjectMilestonePlanRepository;
 import com.chainlance.repository.ProjectRepository;
 import com.chainlance.repository.ProposalRepository;
 import com.chainlance.repository.WalletAddressRepository;
+import com.chainlance.wallet.EthereumAddress;
 import com.chainlance.web.ApiException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -148,6 +149,39 @@ public class AgreementService {
             throw notFound();
         }
         return toResponse(agreement);
+    }
+
+    /**
+     * Links a verified wallet address to the agreement for the caller.
+     * Can be changed until the escrow is registered on-chain.
+     */
+    @Transactional
+    public AgreementResponse linkWallet(Long agreementId, Long userId, String address) {
+        String normalized = EthereumAddress.normalize(address);
+        Agreement agreement = agreements.findById(agreementId).orElseThrow(AgreementService::notFound);
+        Proposal proposal = agreement.getProposal();
+        boolean isClient = ProposalAccess.isClient(proposal, userId);
+        boolean isFreelancer = ProposalAccess.isFreelancer(proposal, userId);
+        if (!isClient && !isFreelancer) {
+            throw notFound();
+        }
+        if (agreement.getEscrowAddress() != null) {
+            throw conflict("ESCROW_ALREADY_REGISTERED", "Wallet cannot be changed after escrow is registered");
+        }
+        if (!wallets.existsByAddressAndUserId(normalized, userId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "WALLET_NOT_LINKED",
+                    "Wallet " + normalized + " is not a verified wallet of the current user");
+        }
+        Instant now = Instant.now(clock);
+        if (isClient) {
+            agreement.setClientWallet(normalized);
+            agreement.setClientFinalizedAt(now);
+        } else {
+            agreement.setFreelancerWallet(normalized);
+            agreement.setFreelancerFinalizedAt(now);
+        }
+        Agreement saved = agreements.save(agreement);
+        return toResponse(saved);
     }
 
     // ------------------------------------------------------------------ helpers

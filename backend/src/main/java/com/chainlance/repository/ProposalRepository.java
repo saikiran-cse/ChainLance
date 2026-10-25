@@ -20,6 +20,8 @@ public interface ProposalRepository extends JpaRepository<Proposal, Long> {
      */
     List<Proposal> findByProjectIdAndFreelancerIdOrderByCreatedAtDesc(Long projectId, Long freelancerId);
 
+    boolean existsByProjectId(Long projectId);
+
     boolean existsByProjectIdAndFreelancerId(Long projectId, Long freelancerId);
 
     boolean existsByProjectIdAndFreelancerIdAndStatusIn(Long projectId, Long freelancerId, Collection<ProposalStatus> statuses);

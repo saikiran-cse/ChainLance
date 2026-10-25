@@ -1,5 +1,7 @@
 package com.chainlance.controller;
 
+import com.chainlance.dto.MilestonePlanItemRequest;
+import com.chainlance.dto.MilestonePlanItemResponse;
 import com.chainlance.dto.PageResponse;
 import com.chainlance.dto.ProjectRequest;
 import com.chainlance.dto.ProjectResponse;
@@ -84,5 +86,20 @@ public class ProjectController {
     @PreAuthorize("hasRole('CLIENT')")
     public ProjectResponse cancel(@AuthenticationPrincipal AppUserDetails current, @PathVariable Long id) {
         return projectService.cancel(id, current.getId());
+    }
+
+    /** Client only: define or replace the milestone plan for a DRAFT or OPEN project before proposals exist. */
+    @PutMapping("/{id}/milestone-plan")
+    @PreAuthorize("hasRole('CLIENT')")
+    public List<MilestonePlanItemResponse> updateMilestonePlan(@AuthenticationPrincipal AppUserDetails current,
+                                                              @PathVariable Long id,
+                                                              @RequestBody List<MilestonePlanItemRequest> items) {
+        return projectService.updateMilestonePlan(id, current.getId(), items);
+    }
+
+    /** View the milestone plan of a project. */
+    @GetMapping("/{id}/milestone-plan")
+    public List<MilestonePlanItemResponse> getMilestonePlan(@PathVariable Long id) {
+        return projectService.getMilestonePlan(id);
     }
 }

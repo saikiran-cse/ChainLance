@@ -1,19 +1,25 @@
 package com.chainlance.service;
 
+import com.chainlance.dto.MilestonePlanItemRequest;
+import com.chainlance.dto.MilestonePlanItemResponse;
 import com.chainlance.dto.PageResponse;
 import com.chainlance.dto.ProjectRequest;
 import com.chainlance.dto.ProjectResponse;
 import com.chainlance.entity.Project;
+import com.chainlance.entity.ProjectMilestonePlan;
 import com.chainlance.entity.User;
 import com.chainlance.entity.enums.ProjectStatus;
 import com.chainlance.entity.enums.Role;
+import com.chainlance.repository.ProjectMilestonePlanRepository;
 import com.chainlance.repository.ProjectRepository;
 import com.chainlance.repository.ProposalRepository;
 import com.chainlance.repository.UserRepository;
 import com.chainlance.web.ApiException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.data.domain.Page;
@@ -33,15 +39,17 @@ public class ProjectService {
     private final ProjectRepository projects;
     private final UserRepository users;
     private final ProposalRepository proposals;
+    private final ProjectMilestonePlanRepository plans;
     private final ProjectAccess access;
     private final ProposalWorkflow workflow;
     private final Clock clock;
 
     public ProjectService(ProjectRepository projects, UserRepository users, ProposalRepository proposals,
-                          ProjectAccess access, ProposalWorkflow workflow, Clock clock) {
+                          ProjectMilestonePlanRepository plans, ProjectAccess access, ProposalWorkflow workflow, Clock clock) {
         this.projects = projects;
         this.users = users;
         this.proposals = proposals;
+        this.plans = plans;
         this.access = access;
         this.workflow = workflow;
         this.clock = clock;
@@ -163,5 +171,112 @@ public class ProjectService {
         if (deadline != null && !deadline.isAfter(Instant.now(clock))) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DEADLINE", "The deadline must be in the future");
         }
+    }
+
+    /**
+     * Client only: set or update the project's milestone plan during drafting or open status
+     * before any proposals exist.
+     */
+    @Transactional
+    public List<MilestonePlanItemResponse> updateMilestonePlan(Long projectId, Long clientId, List<MilestonePlanItemRequest> items) {
+        Project project = access.loadOwned(projectId, clientId);
+        if (project.getStatus() != ProjectStatus.DRAFT && project.getStatus() != ProjectStatus.OPEN) {
+            throw conflict("INVALID_PROJECT_STATUS", "Milestone plan can only be updated for DRAFT or OPEN projects");
+        }
+        if (proposals.existsByProjectId(projectId)) {
+            throw conflict("PROPOSALS_EXIST", "Milestone plan cannot be modified once proposals exist");
+        }
+        if (items == null || items.isEmpty()) {
+            plans.deleteByProjectId(projectId);
+            return List.of();
+        }
+        if (items.size() > 20) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "TOO_MANY_MILESTONES", "Maximum 20 milestones allowed");
+        }
+
+        boolean usePercentage = items.stream().anyMatch(i -> i.percentage() != null);
+        BigDecimal budgetInr = project.getBudgetInr();
+
+        if (usePercentage) {
+            BigDecimal totalPct = BigDecimal.ZERO;
+            for (MilestonePlanItemRequest item : items) {
+                if (item.percentage() == null || item.percentage().signum() <= 0) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PERCENTAGE", "Each milestone must have a positive percentage");
+                }
+                totalPct = totalPct.add(item.percentage());
+            }
+            if (totalPct.compareTo(new BigDecimal("100")) != 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "PERCENTAGE_SUM_INVALID", "Sum of milestone percentages must equal 100");
+            }
+        } else {
+            BigDecimal totalInr = BigDecimal.ZERO;
+            for (MilestonePlanItemRequest item : items) {
+                if (item.inr() == null || item.inr().signum() <= 0) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_ALLOCATION", "Each milestone must have a positive INR allocation");
+                }
+                totalInr = totalInr.add(item.inr().setScale(2, RoundingMode.HALF_UP));
+            }
+            if (totalInr.compareTo(budgetInr.setScale(2, RoundingMode.HALF_UP)) != 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "ALLOCATION_SUM_INVALID",
+                        "Sum of milestone allocations must equal project budget " + budgetInr);
+            }
+        }
+
+        plans.deleteByProjectId(projectId);
+
+        List<ProjectMilestonePlan> created = new ArrayList<>();
+        BigDecimal sumAllocated = BigDecimal.ZERO;
+
+        for (int i = 0; i < items.size(); i++) {
+            MilestonePlanItemRequest req = items.get(i);
+            ProjectMilestonePlan plan = new ProjectMilestonePlan();
+            plan.setProject(project);
+            plan.setPosition(i);
+
+            String desc = req.description();
+            if (req.title() != null && !req.title().isBlank()) {
+                desc = (desc == null || desc.isBlank()) ? req.title().trim() : req.title().trim() + ": " + desc.trim();
+            }
+            if (desc == null || desc.isBlank()) {
+                desc = "Milestone " + (i + 1);
+            }
+            if (desc.length() > 500) {
+                desc = desc.substring(0, 500);
+            }
+            plan.setDescription(desc);
+
+            BigDecimal alloc;
+            if (i == items.size() - 1) {
+                alloc = budgetInr.subtract(sumAllocated);
+            } else {
+                if (usePercentage) {
+                    alloc = budgetInr.multiply(req.percentage()).divide(new BigDecimal("100"), 2, RoundingMode.DOWN);
+                } else {
+                    alloc = req.inr().setScale(2, RoundingMode.HALF_UP);
+                }
+                sumAllocated = sumAllocated.add(alloc);
+            }
+
+            if (alloc.signum() <= 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_ALLOCATION", "Milestone allocation must be greater than zero");
+            }
+            plan.setAllocationInr(alloc);
+            created.add(plans.save(plan));
+        }
+
+        return created.stream().map(p -> new MilestonePlanItemResponse(
+                p.getId(), p.getProject().getId(), p.getPosition(), p.getDescription(), p.getAllocationInr()
+        )).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<MilestonePlanItemResponse> getMilestonePlan(Long projectId) {
+        return plans.findByProjectIdOrderByPositionAsc(projectId).stream()
+                .map(p -> new MilestonePlanItemResponse(p.getId(), p.getProject().getId(), p.getPosition(), p.getDescription(), p.getAllocationInr()))
+                .toList();
+    }
+
+    private static ApiException conflict(String code, String message) {
+        return new ApiException(HttpStatus.CONFLICT, code, message);
     }
 }
