@@ -8,7 +8,7 @@
 -- The FK on project_id needs an index, so a plain one is added BEFORE the old unique index is dropped.
 ALTER TABLE proposals ADD KEY ix_proposals_project (project_id);
 ALTER TABLE proposals DROP INDEX uq_proposal_project_freelancer;
-ALTER TABLE proposals ADD COLUMN active_key VARCHAR(41) GENERATED ALWAYS AS (CASE WHEN status IN ('SUBMITTED','SHORTLISTED','ACCEPTED') THEN CONCAT(project_id, '-', freelancer_id) ELSE NULL END) STORED;
+ALTER TABLE proposals ADD COLUMN active_key VARCHAR(41) GENERATED ALWAYS AS (CASE WHEN status IN ('SUBMITTED','SHORTLISTED','ACCEPTED') THEN CONCAT(project_id, '-', freelancer_id) ELSE NULL END) VIRTUAL;
 ALTER TABLE proposals ADD UNIQUE KEY uq_proposal_one_active (active_key);
 
 -- ---------------------------------------------------------------- 2. price negotiation history
@@ -29,8 +29,8 @@ CREATE TABLE negotiation_offers (
   responded_by  BIGINT        NULL,
   responded_at  DATETIME(3)   NULL,
   created_at    DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  pending_key   BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'PENDING' THEN proposal_id ELSE NULL END) STORED,
-  accepted_key  BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'ACCEPTED' THEN proposal_id ELSE NULL END) STORED,
+  pending_key   BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'PENDING' THEN proposal_id ELSE NULL END) VIRTUAL,
+  accepted_key  BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'ACCEPTED' THEN proposal_id ELSE NULL END) VIRTUAL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_offer_one_pending (pending_key),
   UNIQUE KEY uq_offer_one_accepted (accepted_key),
