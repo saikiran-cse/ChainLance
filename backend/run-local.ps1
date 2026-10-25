@@ -1,4 +1,4 @@
-﻿# Loads backend/.env into THIS PowerShell session only, then starts Spring Boot.
+# Loads backend/.env into THIS PowerShell session only, then starts Spring Boot.
 $ErrorActionPreference = "Stop"
 $envFile = Join-Path $PSScriptRoot ".env"
 
@@ -23,5 +23,6 @@ if (-not $env:DB_PASSWORD -or $env:DB_PASSWORD -eq "change-me") {
     exit 1
 }
 
+Set-Location $PSScriptRoot
 Write-Host "Environment loaded. Starting backend..." -ForegroundColor Green
 mvn spring-boot:run

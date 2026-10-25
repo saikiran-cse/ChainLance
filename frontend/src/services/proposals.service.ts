@@ -1,12 +1,12 @@
 import { env } from '../config/env';
 import { mockProposalsApi } from '../mocks/mockApis';
-import type { Proposal, ProposalInput } from '../types/marketplace';
+import type { Agreement, Proposal, ProposalInput } from '../types/marketplace';
 import { guard } from '../utils/errors';
-import { adaptProposal, unwrapList } from './adapters';
+import { adaptAgreement, adaptProposal, unwrapList } from './adapters';
 import { api } from './api';
 import type { ProposalsApi } from './contracts';
 
-/** LIVE implementation. PENDING: none of these endpoints exist in the backend yet. */
+/** LIVE implementation of Proposals API against Spring Boot backend. */
 const liveProposalsApi: ProposalsApi = {
   async submit(projectId: number, input: ProposalInput): Promise<Proposal> {
     const { data } = await guard(
@@ -27,8 +27,13 @@ const liveProposalsApi: ProposalsApi = {
   },
 
   async mine(): Promise<Proposal[]> {
-    const { data } = await guard(api.get<unknown>('/api/proposals/mine'));
+    const { data } = await guard(api.get<unknown>('/api/proposals/my'));
     return unwrapList(data).map(adaptProposal);
+  },
+
+  async get(id: number): Promise<Proposal> {
+    const { data } = await guard(api.get<unknown>(`/api/proposals/${id}`));
+    return adaptProposal(data);
   },
 
   async shortlist(id: number): Promise<Proposal> {
@@ -36,13 +41,18 @@ const liveProposalsApi: ProposalsApi = {
     return adaptProposal(data);
   },
 
-  async accept(id: number): Promise<Proposal> {
+  async accept(id: number): Promise<Agreement> {
     const { data } = await guard(api.post<unknown>(`/api/proposals/${id}/accept`));
-    return adaptProposal(data);
+    return adaptAgreement(data);
   },
 
   async reject(id: number): Promise<Proposal> {
     const { data } = await guard(api.post<unknown>(`/api/proposals/${id}/reject`));
+    return adaptProposal(data);
+  },
+
+  async withdraw(id: number): Promise<Proposal> {
+    const { data } = await guard(api.post<unknown>(`/api/proposals/${id}/withdraw`));
     return adaptProposal(data);
   },
 };

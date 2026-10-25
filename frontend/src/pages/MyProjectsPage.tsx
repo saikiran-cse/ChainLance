@@ -20,11 +20,20 @@ export default function MyProjectsPage() {
   const projects = useResource(() => projectsService.mine(), []);
   const [working, setWorking] = useState<number | null>(null);
 
-  async function act(project: Project, action: 'publish' | 'close') {
+  async function act(project: Project, action: 'publish' | 'close' | 'cancel') {
     setWorking(project.id);
     try {
-      await (action === 'publish' ? projectsService.publish(project.id) : projectsService.close(project.id));
-      toast.push({ tone: 'success', message: action === 'publish' ? 'Project published.' : 'Project closed.' });
+      if (action === 'publish') {
+        await projectsService.publish(project.id);
+      } else if (action === 'close') {
+        await projectsService.close(project.id);
+      } else {
+        await projectsService.cancel(project.id);
+      }
+      toast.push({
+        tone: 'success',
+        message: action === 'publish' ? 'Project published.' : action === 'close' ? 'Project closed.' : 'Project cancelled.',
+      });
       projects.reload();
     } catch (e) {
       toast.push({ tone: 'error', message: messageOf(e) });
@@ -87,6 +96,9 @@ export default function MyProjectsPage() {
                           <Button size="sm" variant="accent" loading={working === p.id} onClick={() => void act(p, 'publish')}>
                             Publish
                           </Button>
+                          <Button size="sm" variant="ghost" className="text-brick hover:bg-brick/10" loading={working === p.id} onClick={() => void act(p, 'cancel')}>
+                            Cancel
+                          </Button>
                         </>
                       )}
                       {(p.status === 'OPEN' || p.status === 'IN_PROGRESS') && (
@@ -101,6 +113,9 @@ export default function MyProjectsPage() {
                           </ButtonLink>
                           <Button size="sm" variant="danger" loading={working === p.id} onClick={() => void act(p, 'close')}>
                             Close
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-brick hover:bg-brick/10" loading={working === p.id} onClick={() => void act(p, 'cancel')}>
+                            Cancel
                           </Button>
                         </>
                       )}

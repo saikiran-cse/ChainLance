@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import { CounterForm } from '../components/negotiation/CounterForm';
 import { OfferThread } from '../components/negotiation/OfferThread';
 import { Async } from '../components/ui/Async';
@@ -19,24 +19,83 @@ import { formatInr } from '../utils/format';
 
 function Actions({ thread, onChanged }: { thread: NegotiationThread; onChanged(): void }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
-  const [busy, setBusy] = useState<'accept' | 'reject' | null>(null);
-  const [confirm, setConfirm] = useState<'accept' | 'reject' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [rejectConfirm, setRejectConfirm] = useState(false);
   const { proposal, agreement } = thread;
   const isClient = user?.role === 'CLIENT';
   const open = proposal.status === 'SUBMITTED' || proposal.status === 'SHORTLISTED';
 
-  async function run(action: 'accept' | 'reject') {
-    setBusy(action);
+  const offers = proposal.offers ?? [];
+  const pendingOffer = offers.find((o) => o.status === 'PENDING');
+  const acceptedOffer = offers.find((o) => o.status === 'ACCEPTED');
+  const termsAgreed = !pendingOffer && !!acceptedOffer;
+
+  async function handleAcceptOffer(offerId: number) {
+    setBusy(true);
     try {
-      await proposalsService[action](proposal.id);
-      toast.push({ tone: 'success', message: action === 'accept' ? 'Proposal accepted.' : 'Proposal rejected.' });
-      setConfirm(null);
+      await negotiationService.acceptOffer(proposal.id, offerId);
+      toast.push({ tone: 'success', message: 'Offer accepted! Terms are agreed.' });
       onChanged();
     } catch (e) {
       toast.push({ tone: 'error', message: messageOf(e) });
     } finally {
-      setBusy(null);
+      setBusy(false);
+    }
+  }
+
+  async function handleWithdrawOffer(offerId: number) {
+    setBusy(true);
+    try {
+      await negotiationService.withdrawOffer(proposal.id, offerId);
+      toast.push({ tone: 'success', message: 'Offer withdrawn.' });
+      onChanged();
+    } catch (e) {
+      toast.push({ tone: 'error', message: messageOf(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAcceptProposal() {
+    setBusy(true);
+    try {
+      const ag = await proposalsService.accept(proposal.id);
+      toast.push({ tone: 'success', message: 'Agreement created & snapshot frozen!' });
+      navigate(`/app/agreements/${ag.id}`);
+    } catch (e) {
+      toast.push({ tone: 'error', message: messageOf(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRejectProposal() {
+    setBusy(true);
+    try {
+      await proposalsService.reject(proposal.id);
+      toast.push({ tone: 'success', message: 'Proposal rejected.' });
+      setRejectConfirm(false);
+      onChanged();
+    } catch (e) {
+      toast.push({ tone: 'error', message: messageOf(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleWithdrawProposal() {
+    if (!window.confirm('Withdraw this proposal?')) return;
+    setBusy(true);
+    try {
+      await proposalsService.withdraw(proposal.id);
+      toast.push({ tone: 'success', message: 'Proposal withdrawn.' });
+      onChanged();
+    } catch (e) {
+      toast.push({ tone: 'error', message: messageOf(e) });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -47,47 +106,107 @@ function Actions({ thread, onChanged }: { thread: NegotiationThread; onChanged()
           <p className="text-sm text-mute">Agreement</p>
           <div className="mt-1 flex items-center gap-3">
             <StatusBadge status={agreement.status} />
-            <span className="text-sm text-mute">as reported by the backend</span>
+            <span className="text-sm text-mute">Snapshot frozen</span>
           </div>
           <ButtonLink to={`/app/agreements/${agreement.id}`} variant="accent" className="mt-4 w-full">
             Open agreement
           </ButtonLink>
         </div>
-      ) : isClient && open ? (
-        confirm ? (
-          <div role="group" aria-label="Confirm" className="flex flex-col gap-3">
-            <p className="font-medium">{confirm === 'accept' ? 'Accept the current terms?' : 'Reject this proposal?'}</p>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={confirm === 'reject' ? 'danger' : 'primary'}
-                loading={busy === confirm}
-                onClick={() => void run(confirm)}
-              >
-                Yes, {confirm}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setConfirm(null)}>
-                Cancel
-              </Button>
+      ) : open ? (
+        <div className="flex flex-col gap-4">
+          {pendingOffer && (
+            <div className="rounded-lg border border-ochre/40 bg-ochre/5 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-ochre">
+                <Clock className="size-4" />
+                <span>PENDING OFFER: {formatInr(pendingOffer.priceInr)} ({pendingOffer.durationDays} days)</span>
+              </div>
+              <p className="mt-1 text-xs text-mute">
+                Offered by {pendingOffer.offeredBy === user?.id ? 'you' : 'the other party'}.
+              </p>
+              <div className="mt-3 flex gap-2">
+                {pendingOffer.offeredBy !== user?.id ? (
+                  <Button
+                    size="sm"
+                    variant="accent"
+                    loading={busy}
+                    onClick={() => void handleAcceptOffer(pendingOffer.id)}
+                  >
+                    Accept this price
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={busy}
+                    onClick={() => void handleWithdrawOffer(pendingOffer.id)}
+                  >
+                    Withdraw offer
+                  </Button>
+                )}
+              </div>
             </div>
+          )}
+
+          {termsAgreed && (
+            <div className="rounded-lg border border-lime/40 bg-lime/10 p-4">
+              <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+                <CheckCircle2 className="size-4 text-ink" />
+                <span>TERMS AGREED: {formatInr(acceptedOffer.priceInr)} ({acceptedOffer.durationDays} days)</span>
+              </div>
+              <p className="mt-1 text-xs text-mute">
+                {isClient
+                  ? 'Both sides have agreed. Click below to freeze the agreement snapshot.'
+                  : 'Terms agreed. Waiting for client to create the agreement.'}
+              </p>
+              {isClient && (
+                <div className="mt-3">
+                  <Button
+                    variant="accent"
+                    loading={busy}
+                    onClick={() => void handleAcceptProposal()}
+                  >
+                    Accept proposal & freeze agreement
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isClient && !termsAgreed && !pendingOffer && (
+            <p className="text-sm text-mute">
+              Terms must be agreed before accepting the proposal. Make or accept an offer.
+            </p>
+          )}
+
+          <div className="border-t border-line pt-3 flex flex-wrap gap-2">
+            {isClient && (
+              rejectConfirm ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="danger" loading={busy} onClick={() => void handleRejectProposal()}>
+                    Confirm reject
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRejectConfirm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="ghost" className="text-brick hover:bg-brick/10" onClick={() => setRejectConfirm(true)}>
+                  Reject proposal
+                </Button>
+              )
+            )}
+            {!isClient && (
+              <Button size="sm" variant="ghost" className="text-brick hover:bg-brick/10" loading={busy} onClick={() => void handleWithdrawProposal()}>
+                Withdraw proposal
+              </Button>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <Button variant="accent" onClick={() => setConfirm('accept')}>
-              Accept current terms
-            </Button>
-            <Button variant="danger" onClick={() => setConfirm('reject')}>
-              Reject proposal
-            </Button>
-          </div>
-        )
+        </div>
       ) : (
         <p className="text-sm text-mute">
           {proposal.status === 'ACCEPTED'
-            ? 'The proposal is accepted. The agreement appears here once the backend creates it.'
-            : open
-              ? 'The client accepts or rejects. Until then, keep negotiating in the thread.'
-              : 'This negotiation is closed.'}
+            ? 'The proposal was accepted.'
+            : 'This proposal is closed.'}
         </p>
       )}
     </div>
@@ -129,7 +248,7 @@ export default function NegotiationPage() {
                       defaults={{ priceInr: t.proposal.priceInr, durationDays: t.proposal.durationDays }}
                       onSend={async (body) => {
                         await negotiationService.send(proposalId, body);
-                        toast.push({ tone: 'success', message: body.terms ? 'Counteroffer sent.' : 'Message sent.' });
+                        toast.push({ tone: 'success', message: body.terms ? 'Offer sent.' : 'Message sent.' });
                         thread.reload();
                       }}
                     />

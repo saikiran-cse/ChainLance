@@ -71,7 +71,20 @@ export function SnapshotView({ agreement }: { agreement: Agreement }) {
     <div className="flex flex-col gap-4">
       {agreement.snapshotHash && (
         <div>
-          <p className="text-sm text-mute">Snapshot hash</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-mute">Snapshot hash</p>
+            {agreement.snapshotIntegrityOk !== undefined && (
+              <span
+                className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                  agreement.snapshotIntegrityOk
+                    ? 'border border-ink bg-lime text-ink'
+                    : 'border border-brick bg-brick/10 text-brick'
+                }`}
+              >
+                {agreement.snapshotIntegrityOk ? '✓ Hash Verified' : '⚠ Integrity Mismatch'}
+              </span>
+            )}
+          </div>
           <p className="mt-1 break-all font-mono text-sm">{agreement.snapshotHash}</p>
         </div>
       )}

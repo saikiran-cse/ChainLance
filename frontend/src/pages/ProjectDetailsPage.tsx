@@ -1,20 +1,39 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { DeadlineLabel, SkillTags } from '../components/projects/ProjectCard';
 import { Async } from '../components/ui/Async';
-import { ButtonLink } from '../components/ui/Button';
+import { Button, ButtonLink } from '../components/ui/Button';
 import { Panel } from '../components/ui/Panel';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useResource } from '../hooks/useResource';
+import { useToast } from '../hooks/useToast';
 import { projectsService } from '../services/projects.service';
 import type { Project } from '../types/marketplace';
+import { messageOf } from '../utils/errors';
 import { formatDate, formatInr } from '../utils/format';
 
-function ProjectActions({ project }: { project: Project }) {
+function ProjectActions({ project, onChanged }: { project: Project; onChanged(): void }) {
   const { status, user } = useAuth();
+  const toast = useToast();
+  const [cancelling, setCancelling] = useState(false);
   const open = project.status === 'OPEN';
+
+  async function handleCancel() {
+    if (!window.confirm('Cancel this project?')) return;
+    setCancelling(true);
+    try {
+      await projectsService.cancel(project.id);
+      toast.push({ tone: 'success', message: 'Project cancelled.' });
+      onChanged();
+    } catch (e) {
+      toast.push({ tone: 'error', message: messageOf(e) });
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   if (status !== 'authenticated' || !user) {
     return (
@@ -43,12 +62,26 @@ function ProjectActions({ project }: { project: Project }) {
   if (user.role === 'CLIENT' && user.id === project.clientId) {
     return (
       <div className="flex flex-col gap-3">
-        <ButtonLink to={`/app/projects/${project.id}/proposals`} variant="accent" size="lg">
-          Review proposals
-        </ButtonLink>
-        <ButtonLink to={`/app/projects/${project.id}/edit`} variant="outline">
-          Edit project
-        </ButtonLink>
+        {(project.status === 'OPEN' || project.status === 'IN_PROGRESS') && (
+          <ButtonLink to={`/app/projects/${project.id}/proposals`} variant="accent" size="lg">
+            Review proposals
+          </ButtonLink>
+        )}
+        {(project.status === 'DRAFT' || project.status === 'OPEN') && (
+          <>
+            <ButtonLink to={`/app/projects/${project.id}/edit`} variant="outline">
+              Edit project
+            </ButtonLink>
+            <Button
+              variant="ghost"
+              className="text-brick hover:bg-brick/10"
+              loading={cancelling}
+              onClick={() => void handleCancel()}
+            >
+              Cancel project
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -120,7 +153,7 @@ export default function ProjectDetailsPage() {
                     </div>
                   </dl>
                   <div className="mt-6 border-t border-line pt-6">
-                    <ProjectActions project={p} />
+                    <ProjectActions project={p} onChanged={project.reload} />
                   </div>
                 </Panel>
               </aside>
