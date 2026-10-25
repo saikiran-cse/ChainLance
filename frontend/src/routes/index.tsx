@@ -19,6 +19,7 @@ import ProposalReviewPage from '../pages/ProposalReviewPage';
 import RegisterPage from '../pages/RegisterPage';
 import SubmitProposalPage from '../pages/SubmitProposalPage';
 import WalletPage from '../pages/WalletPage';
+import AdminDisputesPage from '../pages/AdminDisputesPage';
 import { RedirectIfAuthed, RequireAuth } from './guards';
 
 /**
@@ -83,6 +84,18 @@ const routes: RouteObject[] = [
         children: [
           { path: 'proposals', element: <MyProposalsPage /> },
           { path: 'projects/:id/apply', element: <SubmitProposalPage /> },
+        ],
+      },
+    ],
+  },
+  {
+    path: 'app',
+    element: <RequireAuth roles={['ADMIN']} />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { path: 'admin/disputes', element: <AdminDisputesPage /> },
         ],
       },
     ],
