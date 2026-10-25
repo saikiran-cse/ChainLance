@@ -13,7 +13,7 @@ async function deployFixture() {
   const [admin, client, freelancer, other] = await ethers.getSigners();
   const factory = await ethers.deployContract("ChainLanceFactory", [admin.address]);
   await factory.connect(client).createEscrow(freelancer.address, PROJECT_ID, ALLOCS);
-  const escrow = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(PROJECT_ID));
+  const escrow = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(client.address, PROJECT_ID));
   return { admin, client, freelancer, other, factory, escrow };
 }
 
@@ -70,7 +70,7 @@ describe("ChainLanceFactory", () => {
     expect(await factory.owner()).to.equal(other.address);
     expect(await escrow.admin()).to.equal(admin.address); // existing escrow unchanged
     await factory.connect(client).createEscrow(freelancer.address, ethers.id("new"), ALLOCS);
-    const e2 = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(ethers.id("new")));
+    const e2 = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(client.address, ethers.id("new")));
     expect(await e2.admin()).to.equal(other.address);
     await expect(factory.connect(other).renounceOwnership()).to.be.revertedWithCustomError(factory, "RenounceDisabled");
     await expect(factory.connect(client).transferOwnership(client.address)).to.be.revertedWithCustomError(factory, "OwnableUnauthorizedAccount");
@@ -318,7 +318,7 @@ describe("ChainLanceEscrow accounting and security", () => {
     const attacker = await ethers.deployContract("ReentrantFreelancer");
     const factory = await ethers.deployContract("ChainLanceFactory", [admin.address]);
     await factory.connect(client).createEscrow(await attacker.getAddress(), ethers.id("evil"), ALLOCS);
-    const escrow = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(ethers.id("evil")));
+    const escrow = await ethers.getContractAt("ChainLanceEscrow", await factory.escrowOf(client.address, ethers.id("evil")));
     await escrow.connect(client).fund({ value: TOTAL });
     await attacker.setEscrow(await escrow.getAddress());
 

@@ -10,6 +10,7 @@ import {
   Search,
   Send,
   ServerCog,
+  Gavel,
   UserRound,
   Wallet,
   X,
@@ -60,7 +61,7 @@ function navFor(role: Role): NavItem[] {
       ...common,
     ];
   }
-  return [dash, { to: '/api-status', label: 'Backend progress', icon: <ServerCog aria-hidden className={icon} /> }, ...common];
+  if (role === 'ADMIN') { return [dash, { to: '/app/admin/disputes', label: 'Disputes Portal', icon: <Gavel aria-hidden className={icon} /> }, agreements, ...common]; } return [dash, { to: '/api-status', label: 'Backend progress', icon: <ServerCog aria-hidden className={icon} /> }, ...common];
 }
 
 function itemClass({ isActive }: { isActive: boolean }) {

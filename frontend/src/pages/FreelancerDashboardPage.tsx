@@ -19,7 +19,7 @@ import { formatInr, greeting } from '../utils/format';
 export default function FreelancerDashboardPage() {
   useDocumentTitle('Dashboard');
   const { user } = useAuth();
-  const open = useResource(() => projectsService.list({}), []);
+  const open = useResource(async () => (await projectsService.list({})).content, []);
   const mine = useResource(() => proposalsService.mine(), []);
   const agreements = useResource(() => agreementsService.mine(), []);
 

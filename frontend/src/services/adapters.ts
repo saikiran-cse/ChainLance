@@ -5,6 +5,9 @@ import type {
   MilestonePlanItem,
   NegotiationMessage,
   NegotiationThread,
+  Offer,
+  OfferStatus,
+  PageResponse,
   Project,
   ProjectInput,
   ProjectStatus,
@@ -48,10 +51,9 @@ function optNum(value: unknown): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-/** wei columns are DECIMAL(38,0): keep them as strings, never JS numbers. */
+/** wei columns are DECIMAL(38,0): must be decimal strings, refuse everything else. */
 function optWei(value: unknown): string | undefined {
   if (typeof value === 'string' && /^\d+$/.test(value)) return value;
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return BigInt(value).toString();
   return undefined;
 }
 
@@ -118,6 +120,22 @@ export function projectToPayload(input: ProjectInput): Record<string, unknown> {
   };
 }
 
+export function adaptOffer(data: unknown): Offer {
+  const r = asRaw(data);
+  return {
+    id: num(r.id),
+    proposalId: num(r.proposalId),
+    offeredBy: num(r.offeredBy),
+    priceInr: num(r.priceInr ?? r.price),
+    durationDays: num(r.durationDays),
+    note: optStr(r.note),
+    status: str(r.status, 'PENDING') as OfferStatus,
+    respondedBy: optNum(r.respondedBy),
+    respondedAt: optStr(r.respondedAt),
+    createdAt: str(r.createdAt),
+  };
+}
+
 export function adaptProposal(data: unknown): Proposal {
   const r = asRaw(data);
   const project = asRaw(r.project);
@@ -140,6 +158,7 @@ export function adaptProposal(data: unknown): Proposal {
     status: str(r.status, 'SUBMITTED') as ProposalStatus,
     createdAt: str(r.createdAt),
     updatedAt: optStr(r.updatedAt),
+    offers: list(r.offers).map(adaptOffer),
   };
 }
 
@@ -183,7 +202,19 @@ export function adaptAgreementMilestone(data: unknown, index = 0): AgreementMile
 export function adaptAgreement(data: unknown): Agreement {
   const r = asRaw(data);
   const snapshotRaw = r.snapshot ?? r.snapshotJson;
-  const snapshot = typeof snapshotRaw === 'object' && snapshotRaw !== null ? asRaw(snapshotRaw) : null;
+  let snapshot: Raw | null = null;
+  if (typeof snapshotRaw === 'object' && snapshotRaw !== null) {
+    snapshot = asRaw(snapshotRaw);
+  } else if (typeof snapshotRaw === 'string') {
+    try {
+      const parsed = JSON.parse(snapshotRaw);
+      if (typeof parsed === 'object' && parsed !== null) {
+        snapshot = asRaw(parsed);
+      }
+    } catch {
+      snapshot = null;
+    }
+  }
   const snap = snapshot ?? {};
   return {
     id: num(r.id),
@@ -203,12 +234,25 @@ export function adaptAgreement(data: unknown): Agreement {
     freelancerFinalizedAt: optStr(r.freelancerFinalizedAt) ?? null,
     snapshot,
     snapshotHash: optStr(r.snapshotHash) ?? null,
+    snapshotIntegrityOk: typeof r.snapshotIntegrityOk === 'boolean' ? r.snapshotIntegrityOk : undefined,
     clientWallet: optStr(r.clientWallet) ?? null,
     freelancerWallet: optStr(r.freelancerWallet) ?? null,
     escrowAddress: optStr(r.escrowAddress) ?? null,
     chainId: optNum(r.chainId) ?? null,
     milestones: list(r.milestones).map((m, i) => adaptAgreementMilestone(m, i)),
     createdAt: optStr(r.createdAt),
+  };
+}
+
+export function adaptPage<T>(data: unknown, itemAdapter: (item: unknown) => T): PageResponse<T> {
+  const raw = asRaw(data);
+  const content = unwrapList(data).map(itemAdapter);
+  return {
+    content,
+    page: num(raw.page, 0),
+    size: num(raw.size, content.length),
+    totalElements: num(raw.totalElements, content.length),
+    totalPages: num(raw.totalPages, content.length > 0 ? 1 : 0),
   };
 }
 

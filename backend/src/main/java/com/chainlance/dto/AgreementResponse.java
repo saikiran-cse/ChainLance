@@ -16,6 +16,7 @@ public record AgreementResponse(Long id, Long proposalId, Long projectId, Public
                                 PublicUserResponse freelancer, AgreementStatus status, BigDecimal priceInr,
                                 String totalWei, Map<String, Object> snapshot, String snapshotHash,
                                 boolean snapshotIntegrityOk, String clientWallet, String freelancerWallet,
+                                String onchainProjectId, String factoryAddress, String escrowAddress, Long chainId,
                                 Instant clientFinalizedAt, Instant freelancerFinalizedAt, Instant createdAt) {
 
     public static AgreementResponse from(Agreement a, boolean integrityOk) {
@@ -25,6 +26,7 @@ public record AgreementResponse(Long id, Long proposalId, Long projectId, Public
                 PublicUserResponse.from(project.getClient()), PublicUserResponse.from(proposal.getFreelancer()),
                 a.getStatus(), priceFromSnapshot(a.getSnapshot()), a.getTotalWei().toBigInteger().toString(),
                 a.getSnapshot(), a.getSnapshotHash(), integrityOk, a.getClientWallet(), a.getFreelancerWallet(),
+                a.getOnchainProjectId(), a.getFactoryAddress(), a.getEscrowAddress(), a.getChainId(),
                 a.getClientFinalizedAt(), a.getFreelancerFinalizedAt(), a.getCreatedAt());
     }
 

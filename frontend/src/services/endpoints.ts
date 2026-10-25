@@ -18,7 +18,7 @@ export interface EndpointSpec {
   note?: string;
 }
 
-const live = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
+export const live = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
   method,
   path,
   area,
@@ -26,7 +26,7 @@ const live = (method: HttpMethod, path: string, area: string, usedBy: string, no
   usedBy,
   note,
 });
-const pending = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
+export const pending = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
   method,
   path,
   area,
@@ -47,60 +47,80 @@ export const ENDPOINTS: EndpointSpec[] = [
   live('POST', '/api/wallet/verify', 'Wallet', 'Wallet page', 'The only source of truth for "verified".'),
   live('GET', '/api/wallet', 'Wallet', 'Wallet page, dashboards'),
 
-  // ---- Projects (pending)
-  pending(
-    'GET',
-    '/api/projects',
-    'Projects',
-    'Browse projects, freelancer dashboard',
-    'SecurityConfig currently has no permitAll rule for this path, so anonymous browsing needs a backend rule.',
-  ),
-  pending('POST', '/api/projects', 'Projects', 'Create project'),
-  pending('GET', '/api/projects/{id}', 'Projects', 'Project details, edit project'),
-  pending('PUT', '/api/projects/{id}', 'Projects', 'Edit project'),
-  pending('POST', '/api/projects/{id}/publish', 'Projects', 'Create project, my projects'),
-  pending('POST', '/api/projects/{id}/close', 'Projects', 'My projects'),
+  // ---- Projects (live in Stage 4)
+  live('GET', '/api/projects', 'Projects', 'Browse projects, freelancer dashboard', 'Returns PageResponse of open projects, authenticated.'),
+  live('POST', '/api/projects', 'Projects', 'Create project (starts in DRAFT)'),
+  live('GET', '/api/projects/mine', 'Projects', 'Client dashboard, my projects'),
+  live('GET', '/api/projects/{id}', 'Projects', 'Project details, edit project'),
+  live('PUT', '/api/projects/{id}', 'Projects', 'Edit project (while DRAFT/OPEN)'),
+  live('POST', '/api/projects/{id}/publish', 'Projects', 'Publish draft to open'),
+  live('POST', '/api/projects/{id}/close', 'Projects', 'Close open project'),
+  live('POST', '/api/projects/{id}/cancel', 'Projects', 'Cancel draft or open project'),
 
-  // ---- Proposals (pending)
-  pending('POST', '/api/projects/{id}/proposals', 'Proposals', 'Submit proposal'),
-  pending('GET', '/api/projects/{id}/proposals', 'Proposals', 'Proposal review (owner only)'),
-  pending('GET', '/api/proposals/mine', 'Proposals', 'My proposals, freelancer dashboard'),
-  pending('POST', '/api/proposals/{id}/shortlist', 'Proposals', 'Proposal review'),
-  pending('POST', '/api/proposals/{id}/accept', 'Proposals', 'Proposal review, negotiation'),
-  pending('POST', '/api/proposals/{id}/reject', 'Proposals', 'Proposal review, negotiation'),
+  // ---- Proposals (live in Stage 4)
+  live('POST', '/api/projects/{projectId}/proposals', 'Proposals', 'Submit proposal (freelancer, creates offer #1)'),
+  live('GET', '/api/projects/{projectId}/proposals', 'Proposals', 'Proposal review (owner only)'),
+  live('GET', '/api/proposals/my', 'Proposals', 'My proposals, freelancer dashboard'),
+  live('GET', '/api/proposals/{id}', 'Proposals', 'Proposal details with offers history'),
+  live('POST', '/api/proposals/{id}/shortlist', 'Proposals', 'Shortlist proposal (owner only)'),
+  live('POST', '/api/proposals/{id}/reject', 'Proposals', 'Reject proposal (owner only)'),
+  live('POST', '/api/proposals/{id}/withdraw', 'Proposals', 'Withdraw proposal (freelancer only)'),
 
-  // ---- Negotiation (pending)
-  pending(
-    'GET',
-    '/api/proposals/{id}/negotiation',
-    'Negotiation',
-    'Negotiation workspace',
-    'Response envelope { proposal, messages, agreement? } is an assumption.',
-  ),
-  pending('POST', '/api/proposals/{id}/negotiation', 'Negotiation', 'Negotiation workspace'),
-  pending('POST', '/api/agreements/{id}/counter', 'Negotiation', 'Negotiation workspace, agreement page'),
-  pending('POST', '/api/agreements/{id}/finalize', 'Negotiation', 'Agreement page'),
+  // ---- Offers & Negotiation (live in Stage 4)
+  live('GET', '/api/proposals/{proposalId}/offers', 'Offers', 'Negotiation offers history'),
+  live('POST', '/api/proposals/{proposalId}/offers', 'Offers', 'Make new offer when none is pending'),
+  live('POST', '/api/proposals/{proposalId}/offers/{offerId}/accept', 'Offers', 'Accept pending offer (other party)'),
+  live('POST', '/api/proposals/{proposalId}/offers/{offerId}/counter', 'Offers', 'Counter pending offer (other party)'),
+  live('POST', '/api/proposals/{proposalId}/offers/{offerId}/withdraw', 'Offers', 'Withdraw pending offer (author only)'),
 
-  // ---- Agreements (pending)
-  pending('GET', '/api/agreements/mine', 'Agreements', 'Agreements list, freelancer dashboard'),
-  pending('GET', '/api/agreements/{id}', 'Agreements', 'Agreement details'),
-  pending('GET', '/api/agreements/{id}/milestones', 'Agreements', 'Agreement details'),
+  // ---- Agreements (live in Stage 4)
+  live('POST', '/api/proposals/{id}/accept', 'Agreements', 'Accept proposal and freeze agreement snapshot'),
+  live('GET', '/api/agreements/my', 'Agreements', 'Agreements list, dashboards'),
+  live('GET', '/api/agreements/{id}', 'Agreements', 'Agreement details and snapshot integrity'),
 
-  // ---- Not used by any page yet (future increments)
-  pending('POST', '/api/agreements/{id}/escrow/register', 'Escrow', 'Future: fund escrow'),
-  pending('POST', '/api/transactions/verify', 'Escrow', 'Future: verify a transaction'),
-  pending('GET', '/api/transactions/mine', 'Escrow', 'Future: transaction history'),
-  pending('POST', '/api/agreements/{id}/reconcile', 'Escrow', 'Future: reconcile with chain'),
-  pending('POST', '/api/milestones/{id}/start', 'Milestones', 'Future: milestone pages'),
-  pending('POST', '/api/milestones/{id}/submissions', 'Submissions', 'Future: submit work'),
-  pending('POST', '/api/submissions/{id}/approve', 'Submissions', 'Future: approve work'),
-  pending('POST', '/api/submissions/{id}/request-revision', 'Submissions', 'Future: request revision'),
-  pending('POST', '/api/milestones/{id}/extensions', 'Deadlines', 'Future: deadline extensions'),
-  pending('POST', '/api/milestones/{id}/settlements', 'Settlement', 'Future: settlements'),
-  pending('POST', '/api/milestones/{id}/disputes', 'Disputes', 'Future: open dispute'),
-  pending('GET', '/api/disputes/mine', 'Disputes', 'Future: disputes list'),
-  pending('GET', '/api/admin/disputes', 'Admin', 'Future: admin dispute queue', 'Path is reserved for ROLE_ADMIN in SecurityConfig.'),
-  pending('POST', '/api/agreements/{id}/reviews', 'Reviews', 'Future: reviews'),
+  // ---- Chain & Escrow (live)
+  live('GET', '/api/chain/config', 'Chain', 'Chain configuration, addresses & demo rate'),
+  live('POST', '/api/agreements/{id}/wallets', 'Agreements', 'Link verified wallet to agreement'),
+  live('PUT', '/api/projects/{id}/milestone-plan', 'Projects', 'Define proportional milestone plan'),
+  live('GET', '/api/projects/{id}/milestone-plan', 'Projects', 'Retrieve milestone plan items'),
+  live('POST', '/api/agreements/{id}/milestones/generate', 'Milestones', 'Generate scaled milestones (zero remainder loss)'),
+  live('GET', '/api/agreements/{id}/milestones', 'Milestones', 'List agreement milestones'),
+  live('GET', '/api/milestones/{id}', 'Milestones', 'Milestone detail'),
+  live('POST', '/api/agreements/{id}/escrow/register', 'Escrow', 'Register on-chain escrow deployment tx'),
+  live('POST', '/api/agreements/{id}/escrow/verify-fund', 'Escrow', 'Verify funding deposit on-chain; activate Milestone 0'),
+  live('POST', '/api/agreements/{id}/reconcile', 'Escrow', 'Reconcile on-chain contract state with MySQL'),
+  live('GET', '/api/transactions/mine', 'Escrow', 'User on-chain transaction log history'),
+
+  // ---- Submissions & Revisions (live)
+  live('POST', '/api/milestones/{id}/submissions', 'Submissions', 'Freelancer submits work deliverables'),
+  live('GET', '/api/milestones/{id}/submissions', 'Submissions', 'List milestone submissions'),
+  live('POST', '/api/submissions/{id}/approve', 'Submissions', 'Client approves submission & releases payout'),
+  live('POST', '/api/submissions/{id}/request-revision', 'Submissions', 'Client requests revisions with feedback'),
+
+  // ---- Deadline Extensions (live)
+  live('POST', '/api/milestones/{id}/extensions', 'Deadlines', 'Freelancer requests deadline extension'),
+  live('GET', '/api/milestones/{id}/extensions', 'Deadlines', 'List milestone extension requests'),
+  live('POST', '/api/extensions/{id}/approve', 'Deadlines', 'Client approves deadline extension'),
+  live('POST', '/api/extensions/{id}/reject', 'Deadlines', 'Client rejects deadline extension'),
+
+  // ---- Mutual Settlements (live)
+  live('POST', '/api/milestones/{id}/settlements', 'Settlement', 'Propose agreed mutual split'),
+  live('GET', '/api/milestones/{id}/settlements', 'Settlement', 'List milestone settlement proposals'),
+  live('POST', '/api/settlements/{id}/accept', 'Settlement', 'Accept settlement & verify on-chain payout split'),
+  live('POST', '/api/settlements/{id}/withdraw', 'Settlement', 'Proposer withdraws active settlement'),
+
+  // ---- Disputes & Arbitration (live)
+  live('POST', '/api/milestones/{id}/disputes', 'Disputes', 'Open dispute on-chain & freeze milestone'),
+  live('GET', '/api/milestones/{id}/disputes', 'Disputes', 'List disputes for milestone'),
+  live('GET', '/api/disputes/{id}', 'Disputes', 'Dispute detail and rebuttal thread'),
+  live('POST', '/api/disputes/{id}/responses', 'Disputes', 'Submit evidence or rebuttal into dispute'),
+  live('GET', '/api/admin/disputes', 'Admin', 'Admin paginated dispute arbitration queue'),
+  live('POST', '/api/admin/disputes/{id}/decision', 'Admin', 'Admin records binding allocation decision'),
+  live('POST', '/api/admin/disputes/{id}/resolution-tx', 'Admin', 'Admin executes on-chain resolution tx & distributes funds'),
+
+  // ---- Reviews & Feedback (live)
+  live('POST', '/api/agreements/{id}/reviews', 'Reviews', 'Submit two-way star rating & review upon completion'),
+  live('GET', '/api/users/{id}/reviews', 'Reviews', 'Public user ratings and reviews'),
 ];
 
 export function endpointCounts(): { live: number; pending: number } {

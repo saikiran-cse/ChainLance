@@ -71,26 +71,33 @@ function isParticipant(proposal: Proposal, userId: number): boolean {
 
 /* -------------------------------------------------------------------------------------------------------- projects */
 export const mockProjectsApi: ProjectsApi = {
-  async list(query) {
+  async list(query = {}, page = 0, size = 20) {
     await delay();
     const me = getServiceIdentity();
     if (me) ensureSeed(me);
     else ensureAnonymousSeed();
     const q = query.q?.trim().toLowerCase();
-    return clone(
-      newestFirst(
-        state.projects.filter((p) => {
-          if (p.status !== 'OPEN') return false;
-          if (query.category && p.category !== query.category) return false;
-          if (query.skill && !p.skills.some((s) => s.toLowerCase() === query.skill?.toLowerCase())) return false;
-          if (q) {
-            const haystack = `${p.title} ${p.description} ${p.skills.join(' ')} ${p.clientName ?? ''}`.toLowerCase();
-            if (!haystack.includes(q)) return false;
-          }
-          return true;
-        }),
-      ),
+    const filtered = newestFirst(
+      state.projects.filter((p) => {
+        if (p.status !== 'OPEN') return false;
+        if (query.category && p.category !== query.category) return false;
+        if (query.skill && !p.skills.some((s) => s.toLowerCase() === query.skill?.toLowerCase())) return false;
+        if (q) {
+          const haystack = `${p.title} ${p.description} ${p.skills.join(' ')} ${p.clientName ?? ''}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+        return true;
+      }),
     );
+    const start = page * size;
+    const content = clone(filtered.slice(start, start + size));
+    return {
+      content,
+      page,
+      size,
+      totalElements: filtered.length,
+      totalPages: Math.ceil(filtered.length / size) || 1,
+    };
   },
 
   async get(id) {
@@ -178,6 +185,19 @@ export const mockProjectsApi: ProjectsApi = {
     found.updatedAt = iso(0);
     return clone(found);
   },
+
+  async cancel(id) {
+    await delay();
+    const me = requireIdentity();
+    const found = projectById(id);
+    if (found.clientId !== me.id) throw forbidden();
+    if (found.status !== 'OPEN' && found.status !== 'DRAFT') {
+      throw conflict('Only open or draft projects can be cancelled.', 'PROJECT_NOT_CANCELLABLE');
+    }
+    found.status = 'CANCELLED';
+    found.updatedAt = iso(0);
+    return clone(found);
+  },
 };
 
 /* ------------------------------------------------------------------------------------------------------ proposals */
@@ -221,6 +241,14 @@ export const mockProposalsApi: ProposalsApi = {
     return clone(newestFirst(state.proposals.filter((p) => p.freelancerId === me.id)));
   },
 
+  async get(id) {
+    await delay();
+    const me = requireIdentity();
+    const found = proposalById(id);
+    if (!isParticipant(found, me.id)) throw forbidden('You are not a participant in this proposal.');
+    return clone(found);
+  },
+
   async shortlist(id) {
     await delay();
     const me = requireIdentity();
@@ -240,21 +268,23 @@ export const mockProposalsApi: ProposalsApi = {
       throw conflict('This proposal can no longer be accepted.', 'PROPOSAL_STATE');
     }
     found.status = 'ACCEPTED';
-    if (!agreementForProposal(found.id)) {
+    let agreement = agreementForProposal(found.id);
+    if (!agreement) {
       const proj = projectById(found.projectId);
       const lastTerms = [...state.messages]
         .filter((m) => m.proposalId === found.id && m.proposedTerms)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.proposedTerms;
-      state.agreements.push(
-        buildAgreement(
-          found,
-          proj,
-          lastTerms?.priceInr ?? found.priceInr,
-          lastTerms?.durationDays ?? found.durationDays,
-        ),
+      agreement = buildAgreement(
+        found,
+        proj,
+        lastTerms?.priceInr ?? found.priceInr,
+        lastTerms?.durationDays ?? found.durationDays,
       );
+      agreement.status = 'FINALIZED';
+      agreement.snapshotIntegrityOk = true;
+      state.agreements.push(agreement);
     }
-    return clone(found);
+    return clone(agreement);
   },
 
   async reject(id) {
@@ -264,6 +294,18 @@ export const mockProposalsApi: ProposalsApi = {
     if (ownerOf(found) !== me.id) throw forbidden();
     if (found.status === 'ACCEPTED') throw conflict('An accepted proposal cannot be rejected.', 'PROPOSAL_STATE');
     found.status = 'REJECTED';
+    return clone(found);
+  },
+
+  async withdraw(id) {
+    await delay();
+    const me = requireIdentity();
+    const found = proposalById(id);
+    if (found.freelancerId !== me.id) throw forbidden('Only the author can withdraw this proposal.');
+    if (found.status !== 'SUBMITTED' && found.status !== 'SHORTLISTED') {
+      throw conflict('This proposal can no longer be withdrawn.', 'PROPOSAL_STATE');
+    }
+    found.status = 'WITHDRAWN';
     return clone(found);
   },
 };
@@ -290,6 +332,64 @@ function appendMessage(
 }
 
 export const mockNegotiationApi: NegotiationApi = {
+  async offers(proposalId) {
+    await delay();
+    const proposal = proposalById(proposalId);
+    return clone(proposal.offers ?? []);
+  },
+
+  async makeOffer(proposalId, input) {
+    await delay(300);
+    const me = requireIdentity();
+    const proposal = proposalById(proposalId);
+    if (!proposal.offers) proposal.offers = [];
+    const created = {
+      id: nextId(),
+      proposalId,
+      offeredBy: me.id,
+      priceInr: input.priceInr,
+      durationDays: input.durationDays,
+      note: input.note,
+      status: 'PENDING' as const,
+      createdAt: iso(0),
+    };
+    proposal.offers.push(created);
+    appendMessage(proposal, me.id, me.displayName, input.note || `Offer ₹${input.priceInr}`, {
+      priceInr: input.priceInr,
+      durationDays: input.durationDays,
+    });
+    return clone(created);
+  },
+
+  async acceptOffer(proposalId, offerId) {
+    await delay(300);
+    const me = requireIdentity();
+    const proposal = proposalById(proposalId);
+    const offer = proposal.offers?.find((o) => o.id === offerId);
+    if (!offer) throw notFound('Offer');
+    offer.status = 'ACCEPTED';
+    offer.respondedBy = me.id;
+    offer.respondedAt = iso(0);
+    return clone(offer);
+  },
+
+  async counterOffer(proposalId, offerId, input) {
+    await delay(300);
+    const proposal = proposalById(proposalId);
+    const prev = proposal.offers?.find((o) => o.id === offerId);
+    if (prev) prev.status = 'COUNTERED';
+    return await mockNegotiationApi.makeOffer(proposalId, input);
+  },
+
+  async withdrawOffer(proposalId, offerId) {
+    await delay(300);
+    const proposal = proposalById(proposalId);
+    const offer = proposal.offers?.find((o) => o.id === offerId);
+    if (!offer) throw notFound('Offer');
+    offer.status = 'WITHDRAWN';
+    return clone(offer);
+  },
+
   async thread(proposalId) {
     await delay();
     const me = requireIdentity();
@@ -349,41 +449,5 @@ export const mockAgreementsApi: AgreementsApi = {
     const agreement = agreementById(id);
     requireAgreementParticipant(agreement, me.id);
     return clone(agreement.milestones);
-  },
-
-  async counter(id, body) {
-    await delay(350);
-    const me = requireIdentity();
-    const agreement = agreementById(id);
-    requireAgreementParticipant(agreement, me.id);
-    if (agreement.status !== 'DRAFT') {
-      throw conflict('Only a draft agreement can be countered.', 'AGREEMENT_NOT_DRAFT');
-    }
-    const proposal = proposalById(agreement.proposalId);
-    appendMessage(proposal, me.id, me.displayName, body.message, body.terms);
-    if (body.terms?.priceInr !== undefined) {
-      agreement.priceInr = body.terms.priceInr;
-      agreement.snapshot = { ...(agreement.snapshot ?? {}), priceInr: body.terms.priceInr };
-    }
-    if (body.terms?.durationDays !== undefined) {
-      agreement.snapshot = { ...(agreement.snapshot ?? {}), durationDays: body.terms.durationDays };
-      agreement.deadline = iso(body.terms.durationDays);
-    }
-    // Changing terms means both sides must confirm again.
-    agreement.clientFinalizedAt = null;
-    agreement.freelancerFinalizedAt = null;
-    return clone(agreement);
-  },
-
-  async finalize(id) {
-    await delay(350);
-    const me = requireIdentity();
-    const agreement = agreementById(id);
-    const side = requireAgreementParticipant(agreement, me.id);
-    if (agreement.status !== 'DRAFT') throw conflict('This agreement is already finalized.', 'AGREEMENT_NOT_DRAFT');
-    if (side === 'client') agreement.clientFinalizedAt = iso(0);
-    else agreement.freelancerFinalizedAt = iso(0);
-    if (agreement.clientFinalizedAt && agreement.freelancerFinalizedAt) agreement.status = 'FINALIZED';
-    return clone(agreement);
   },
 };

@@ -7,7 +7,16 @@
 
 export type ProjectStatus = 'DRAFT' | 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CLOSED' | 'CANCELLED';
 export type ProposalStatus = 'SUBMITTED' | 'SHORTLISTED' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN';
+export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'COUNTERED' | 'WITHDRAWN' | 'CLOSED';
 export type AgreementStatus = 'DRAFT' | 'FINALIZED' | 'FUNDED' | 'COMPLETED' | 'CANCELLED';
+
+export interface PageResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
 
 /** project_milestone_plans row */
 export interface MilestonePlanItem {
@@ -49,6 +58,19 @@ export interface ProjectQuery {
   skill?: string;
 }
 
+export interface Offer {
+  id: number;
+  proposalId: number;
+  offeredBy: number;
+  priceInr: number;
+  durationDays: number;
+  note?: string;
+  status: OfferStatus;
+  respondedBy?: number | null;
+  respondedAt?: string | null;
+  createdAt: string;
+}
+
 export interface Proposal {
   id: number;
   projectId: number;
@@ -62,6 +84,7 @@ export interface Proposal {
   status: ProposalStatus;
   createdAt: string;
   updatedAt?: string;
+  offers?: Offer[];
 }
 
 export interface ProposalInput {
@@ -127,6 +150,7 @@ export interface Agreement {
   freelancerFinalizedAt?: string | null;
   snapshot?: Record<string, unknown> | null;
   snapshotHash?: string | null;
+  snapshotIntegrityOk?: boolean;
   clientWallet?: string | null;
   freelancerWallet?: string | null;
   escrowAddress?: string | null;

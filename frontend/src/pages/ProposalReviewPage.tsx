@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Async } from '../components/ui/Async';
 import { Button, ButtonLink } from '../components/ui/Button';
@@ -20,11 +20,12 @@ type Action = 'shortlist' | 'accept' | 'reject';
 
 const CONFIRM: Record<Action, { label: string; question: string; done: string }> = {
   shortlist: { label: 'Shortlist', question: 'Shortlist this proposal and open a negotiation?', done: 'Proposal shortlisted.' },
-  accept: { label: 'Accept', question: 'Accept this proposal?', done: 'Proposal accepted.' },
+  accept: { label: 'Accept', question: 'Accept this proposal and create an agreement? (Requires agreed offer terms)', done: 'Proposal accepted.' },
   reject: { label: 'Reject', question: 'Reject this proposal? The freelancer will see it.', done: 'Proposal rejected.' },
 };
 
 function ProposalCard({ proposal, onChanged }: { proposal: Proposal; onChanged(): void }) {
+  const navigate = useNavigate();
   const toast = useToast();
   const [confirming, setConfirming] = useState<Action | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,8 +34,18 @@ function ProposalCard({ proposal, onChanged }: { proposal: Proposal; onChanged()
   async function run(action: Action) {
     setBusy(true);
     try {
-      await proposalsService[action](proposal.id);
-      toast.push({ tone: 'success', message: CONFIRM[action].done });
+      if (action === 'shortlist') {
+        await proposalsService.shortlist(proposal.id);
+        toast.push({ tone: 'success', message: 'Proposal shortlisted.' });
+      } else if (action === 'reject') {
+        await proposalsService.reject(proposal.id);
+        toast.push({ tone: 'success', message: 'Proposal rejected.' });
+      } else if (action === 'accept') {
+        const ag = await proposalsService.accept(proposal.id);
+        toast.push({ tone: 'success', message: 'Proposal accepted! Agreement created.' });
+        navigate(`/app/agreements/${ag.id}`);
+        return;
+      }
       setConfirming(null);
       onChanged();
     } catch (e) {
@@ -110,13 +121,18 @@ function ProposalCard({ proposal, onChanged }: { proposal: Proposal; onChanged()
               </Button>
             )}
             {!decided && (
-              <Button variant="danger" onClick={() => setConfirming('reject')}>
-                Reject
-              </Button>
+              <>
+                <Button variant="danger" onClick={() => setConfirming('reject')}>
+                  Reject
+                </Button>
+                <ButtonLink to={`/app/proposals/${proposal.id}/negotiation`} variant="outline">
+                  Open negotiation
+                </ButtonLink>
+              </>
             )}
-            {(proposal.status === 'SHORTLISTED' || proposal.status === 'ACCEPTED') && (
-              <ButtonLink to={`/app/proposals/${proposal.id}/negotiation`} variant="outline">
-                Open negotiation
+            {proposal.status === 'ACCEPTED' && (
+              <ButtonLink to={`/app/proposals/${proposal.id}/negotiation`} variant="accent">
+                View negotiation & agreement
               </ButtonLink>
             )}
           </div>
