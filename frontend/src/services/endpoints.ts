@@ -18,7 +18,7 @@ export interface EndpointSpec {
   note?: string;
 }
 
-const live = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
+export const live = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
   method,
   path,
   area,
@@ -26,7 +26,7 @@ const live = (method: HttpMethod, path: string, area: string, usedBy: string, no
   usedBy,
   note,
 });
-const pending = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
+export const pending = (method: HttpMethod, path: string, area: string, usedBy: string, note?: string): EndpointSpec => ({
   method,
   path,
   area,
@@ -78,34 +78,49 @@ export const ENDPOINTS: EndpointSpec[] = [
   live('GET', '/api/agreements/my', 'Agreements', 'Agreements list, dashboards'),
   live('GET', '/api/agreements/{id}', 'Agreements', 'Agreement details and snapshot integrity'),
 
-  // ---- Future increments (pending)
-  pending('GET', '/api/chain/config', 'Chain', 'Phase 2: Chain config'),
-  pending('POST', '/api/agreements/{id}/wallets', 'Agreements', 'Phase 2: Wallet selection'),
-  pending('POST', '/api/agreements/{id}/milestones/generate', 'Milestones', 'Phase 2: Generate milestones'),
-  pending('PUT', '/api/projects/{id}/milestone-plan', 'Projects', 'Phase 2: Milestone plan editor'),
-  pending('GET', '/api/agreements/{id}/milestones', 'Agreements', 'Phase 2: Milestone list'),
-  pending('POST', '/api/agreements/{id}/escrow/register', 'Escrow', 'Phase 3: Escrow registration'),
-  pending('POST', '/api/transactions/verify', 'Escrow', 'Phase 3: Verify on-chain transaction'),
-  pending('GET', '/api/transactions/mine', 'Escrow', 'Phase 3: Transaction history'),
-  pending('POST', '/api/agreements/{id}/reconcile', 'Escrow', 'Phase 3: Reconcile contract with DB'),
-  pending('POST', '/api/milestones/{id}/submissions', 'Submissions', 'Phase 4: Submit work'),
-  pending('POST', '/api/submissions/{id}/approve', 'Submissions', 'Phase 4: Approve work and release'),
-  pending('POST', '/api/submissions/{id}/request-revision', 'Submissions', 'Phase 4: Request revision'),
-  pending('POST', '/api/milestones/{id}/extensions', 'Deadlines', 'Phase 4: Request extension'),
-  pending('POST', '/api/extensions/{id}/approve', 'Deadlines', 'Phase 4: Approve extension'),
-  pending('POST', '/api/extensions/{id}/reject', 'Deadlines', 'Phase 4: Reject extension'),
-  pending('POST', '/api/milestones/{id}/settlements', 'Settlement', 'Phase 4: Propose settlement'),
-  pending('POST', '/api/settlements/{id}/accept', 'Settlement', 'Phase 4: Accept settlement'),
-  pending('POST', '/api/settlements/{id}/withdraw', 'Settlement', 'Phase 4: Withdraw settlement'),
-  pending('POST', '/api/milestones/{id}/disputes', 'Disputes', 'Phase 4: Open dispute'),
-  pending('POST', '/api/disputes/{id}/responses', 'Disputes', 'Phase 4: Respond to dispute'),
-  pending('GET', '/api/disputes/mine', 'Disputes', 'Phase 4: My disputes'),
-  pending('GET', '/api/admin/disputes', 'Admin', 'Phase 4: Admin dispute queue'),
-  pending('GET', '/api/admin/disputes/{id}', 'Admin', 'Phase 4: Admin dispute detail'),
-  pending('POST', '/api/admin/disputes/{id}/decision', 'Admin', 'Phase 4: Admin dispute decision'),
-  pending('POST', '/api/admin/disputes/{id}/resolution-tx', 'Admin', 'Phase 4: Admin resolution tx'),
-  pending('POST', '/api/agreements/{id}/reviews', 'Reviews', 'Phase 4: Submit review'),
-  pending('GET', '/api/users/{id}/reviews', 'Reviews', 'Phase 4: User reviews'),
+  // ---- Chain & Escrow (live)
+  live('GET', '/api/chain/config', 'Chain', 'Chain configuration, addresses & demo rate'),
+  live('POST', '/api/agreements/{id}/wallets', 'Agreements', 'Link verified wallet to agreement'),
+  live('PUT', '/api/projects/{id}/milestone-plan', 'Projects', 'Define proportional milestone plan'),
+  live('GET', '/api/projects/{id}/milestone-plan', 'Projects', 'Retrieve milestone plan items'),
+  live('POST', '/api/agreements/{id}/milestones/generate', 'Milestones', 'Generate scaled milestones (zero remainder loss)'),
+  live('GET', '/api/agreements/{id}/milestones', 'Milestones', 'List agreement milestones'),
+  live('GET', '/api/milestones/{id}', 'Milestones', 'Milestone detail'),
+  live('POST', '/api/agreements/{id}/escrow/register', 'Escrow', 'Register on-chain escrow deployment tx'),
+  live('POST', '/api/agreements/{id}/escrow/verify-fund', 'Escrow', 'Verify funding deposit on-chain; activate Milestone 0'),
+  live('POST', '/api/agreements/{id}/reconcile', 'Escrow', 'Reconcile on-chain contract state with MySQL'),
+  live('GET', '/api/transactions/mine', 'Escrow', 'User on-chain transaction log history'),
+
+  // ---- Submissions & Revisions (live)
+  live('POST', '/api/milestones/{id}/submissions', 'Submissions', 'Freelancer submits work deliverables'),
+  live('GET', '/api/milestones/{id}/submissions', 'Submissions', 'List milestone submissions'),
+  live('POST', '/api/submissions/{id}/approve', 'Submissions', 'Client approves submission & releases payout'),
+  live('POST', '/api/submissions/{id}/request-revision', 'Submissions', 'Client requests revisions with feedback'),
+
+  // ---- Deadline Extensions (live)
+  live('POST', '/api/milestones/{id}/extensions', 'Deadlines', 'Freelancer requests deadline extension'),
+  live('GET', '/api/milestones/{id}/extensions', 'Deadlines', 'List milestone extension requests'),
+  live('POST', '/api/extensions/{id}/approve', 'Deadlines', 'Client approves deadline extension'),
+  live('POST', '/api/extensions/{id}/reject', 'Deadlines', 'Client rejects deadline extension'),
+
+  // ---- Mutual Settlements (live)
+  live('POST', '/api/milestones/{id}/settlements', 'Settlement', 'Propose agreed mutual split'),
+  live('GET', '/api/milestones/{id}/settlements', 'Settlement', 'List milestone settlement proposals'),
+  live('POST', '/api/settlements/{id}/accept', 'Settlement', 'Accept settlement & verify on-chain payout split'),
+  live('POST', '/api/settlements/{id}/withdraw', 'Settlement', 'Proposer withdraws active settlement'),
+
+  // ---- Disputes & Arbitration (live)
+  live('POST', '/api/milestones/{id}/disputes', 'Disputes', 'Open dispute on-chain & freeze milestone'),
+  live('GET', '/api/milestones/{id}/disputes', 'Disputes', 'List disputes for milestone'),
+  live('GET', '/api/disputes/{id}', 'Disputes', 'Dispute detail and rebuttal thread'),
+  live('POST', '/api/disputes/{id}/responses', 'Disputes', 'Submit evidence or rebuttal into dispute'),
+  live('GET', '/api/admin/disputes', 'Admin', 'Admin paginated dispute arbitration queue'),
+  live('POST', '/api/admin/disputes/{id}/decision', 'Admin', 'Admin records binding allocation decision'),
+  live('POST', '/api/admin/disputes/{id}/resolution-tx', 'Admin', 'Admin executes on-chain resolution tx & distributes funds'),
+
+  // ---- Reviews & Feedback (live)
+  live('POST', '/api/agreements/{id}/reviews', 'Reviews', 'Submit two-way star rating & review upon completion'),
+  live('GET', '/api/users/{id}/reviews', 'Reviews', 'Public user ratings and reviews'),
 ];
 
 export function endpointCounts(): { live: number; pending: number } {
