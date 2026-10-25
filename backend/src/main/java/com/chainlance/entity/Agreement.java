@@ -24,6 +24,8 @@ import org.hibernate.type.SqlTypes;
 /**
  * Persistence mapping for table agreements. No business logic here.
  * Associations are LAZY many-to-one only (no collections, no cascades), so nothing is deleted or loaded implicitly.
+ * Stage 4: proposal, total_wei, snapshot_json and snapshot_hash are updatable = false, so JPA never rewrites
+ * the agreed terms after the first insert (the escrow-related columns stay updatable for later stages).
  */
 @Entity
 @Table(name = "agreements")
@@ -34,10 +36,10 @@ public class Agreement {
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "proposal_id", nullable = false)
+    @JoinColumn(name = "proposal_id", nullable = false, updatable = false)
     private Proposal proposal;
 
-    @Column(name = "total_wei", nullable = false, precision = 38, scale = 0)
+    @Column(name = "total_wei", nullable = false, updatable = false, precision = 38, scale = 0)
     private BigDecimal totalWei;
 
     @Enumerated(EnumType.STRING)
@@ -52,11 +54,11 @@ public class Agreement {
     private Instant freelancerFinalizedAt;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "snapshot_json", columnDefinition = "json")
+    @Column(name = "snapshot_json", updatable = false, columnDefinition = "json")
     private Map<String, Object> snapshot;
 
     @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "snapshot_hash", nullable = true, length = 66, columnDefinition = "char(66)")
+    @Column(name = "snapshot_hash", nullable = true, updatable = false, length = 66, columnDefinition = "char(66)")
     private String snapshotHash;
 
     @JdbcTypeCode(SqlTypes.CHAR)

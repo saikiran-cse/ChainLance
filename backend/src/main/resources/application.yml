@@ -38,6 +38,8 @@ chainlance:
     required-confirmations: ${REQUIRED_CONFIRMATIONS:1}
   wallet:
     challenge-ttl-minutes: 10
+  pricing:
+    inr-per-eth: ${INR_PER_ETH:250000}      # DEMO fixed rate (INR per 1 ETH). It is frozen into each agreement snapshot.
 
 management:
   endpoints:
