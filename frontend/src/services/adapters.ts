@@ -216,16 +216,19 @@ export function adaptAgreement(data: unknown): Agreement {
     }
   }
   const snap = snapshot ?? {};
+  const clientObj = asRaw(r.client ?? snap.client);
+  const freelancerObj = asRaw(r.freelancer ?? snap.freelancer);
+  const projectObj = asRaw(r.project ?? snap.project);
   return {
     id: num(r.id),
     proposalId: num(r.proposalId),
-    projectId: optNum(r.projectId ?? snap.projectId),
-    projectTitle: optStr(r.projectTitle ?? snap.projectTitle ?? snap.title),
-    projectDescription: optStr(r.projectDescription ?? snap.projectDescription ?? snap.description),
-    clientId: optNum(r.clientId),
-    clientName: optStr(r.clientName ?? snap.clientName),
-    freelancerId: optNum(r.freelancerId),
-    freelancerName: optStr(r.freelancerName ?? snap.freelancerName),
+    projectId: optNum(r.projectId ?? projectObj.id ?? snap.projectId),
+    projectTitle: optStr(r.projectTitle ?? projectObj.title ?? snap.projectTitle ?? snap.title),
+    projectDescription: optStr(r.projectDescription ?? projectObj.description ?? snap.projectDescription ?? snap.description),
+    clientId: optNum(r.clientId ?? clientObj.id),
+    clientName: optStr(r.clientName ?? clientObj.displayName ?? clientObj.name ?? snap.clientName),
+    freelancerId: optNum(r.freelancerId ?? freelancerObj.id),
+    freelancerName: optStr(r.freelancerName ?? freelancerObj.displayName ?? freelancerObj.name ?? snap.freelancerName),
     totalWei: optWei(r.totalWei) ?? null,
     priceInr: optNum(r.priceInr ?? snap.priceInr ?? snap.price) ?? null,
     deadline: optStr(r.deadline ?? snap.deadline) ?? null,
