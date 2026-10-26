@@ -8,7 +8,7 @@ export const UNAUTHORIZED_EVENT = 'chainlance:unauthorized';
 /** The one HTTP client. Every service uses it, so base URL, JWT attachment and 401 handling live here only. */
 export const api = axios.create({
   baseURL: env.apiBaseUrl,
-  timeout: 20_000,
+  timeout: 60_000,
   headers: { Accept: 'application/json' },
 });
 
