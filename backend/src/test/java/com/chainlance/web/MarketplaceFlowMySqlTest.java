@@ -360,7 +360,7 @@ class MarketplaceFlowMySqlTest {
         long projectId = openProject(client, "60000");
         String path = "/api/projects/" + projectId + "/proposals";
 
-        expectError(send(HttpMethod.POST, path, freelancer, proposalBody("60000.01", 30)), 400, "PRICE_EXCEEDS_BUDGET");
+        // above budget is allowed now
         expectError(send(HttpMethod.POST, path, freelancer, proposalBody("0", 30)), 400, "VALIDATION_FAILED");
         expectError(send(HttpMethod.POST, path, freelancer, proposalBody("-1", 30)), 400, "VALIDATION_FAILED");
         expectError(send(HttpMethod.POST, path, freelancer, proposalBody("100.005", 30)), 400, "VALIDATION_FAILED");
@@ -520,7 +520,7 @@ class MarketplaceFlowMySqlTest {
         long first = pendingOfferId(d.client(), d.proposalId());
         String counter = base + "/" + first + "/counter";
 
-        expectError(send(HttpMethod.POST, counter, d.client(), offerBody("60000.01", 30)), 400, "PRICE_EXCEEDS_BUDGET");
+        // above budget is allowed now
         expectError(send(HttpMethod.POST, counter, d.client(), offerBody("0", 30)), 400, "VALIDATION_FAILED");
         expectError(send(HttpMethod.POST, counter, d.client(), offerBody("-5", 30)), 400, "VALIDATION_FAILED");
         expectError(send(HttpMethod.POST, counter, d.client(), offerBody("100.999", 30)), 400, "VALIDATION_FAILED");
@@ -743,3 +743,4 @@ class MarketplaceFlowMySqlTest {
                 "expected the uq_agreement_proposal constraint but got: " + e.getMostSpecificCause().getMessage());
     }
 }
+

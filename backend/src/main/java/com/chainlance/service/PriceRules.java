@@ -25,12 +25,9 @@ final class PriceRules {
         return value.setScale(2, RoundingMode.UNNECESSARY);
     }
 
-    /** The project's budget is the ceiling for every proposal and offer. */
+    /** The project's budget is indicative; proposals and counter-offers can negotiate above or below it. */
     static void requireWithinBudget(BigDecimal price, BigDecimal budget) {
-        if (price.compareTo(budget) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "PRICE_EXCEEDS_BUDGET",
-                    "Price cannot be higher than the project budget of " + budget.toPlainString() + " INR");
-        }
+        // Budget is indicative: open negotiation allows proposals and counter-offers above or below initial estimate.
     }
 
     static int requireDuration(Integer days) {
@@ -49,3 +46,4 @@ final class PriceRules {
         return trimmed.isEmpty() ? null : trimmed;
     }
 }
+

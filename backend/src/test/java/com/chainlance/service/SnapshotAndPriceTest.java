@@ -102,12 +102,9 @@ class SnapshotAndPriceTest {
     }
 
     @Test
-    void budgetIsAHardCeiling() {
+    void budgetIsIndicative() {
         BigDecimal budget = new BigDecimal("60000.00");
-        PriceRules.requireWithinBudget(new BigDecimal("60000.00"), budget); // equal is fine
-        ApiException e = assertThrows(ApiException.class,
-                () -> PriceRules.requireWithinBudget(new BigDecimal("60000.01"), budget));
-        assertEquals("PRICE_EXCEEDS_BUDGET", e.getCode());
+        PriceRules.requireWithinBudget(new BigDecimal("70000.00"), budget); // above is allowed
     }
 
     @Test
@@ -119,3 +116,4 @@ class SnapshotAndPriceTest {
         }
     }
 }
+
