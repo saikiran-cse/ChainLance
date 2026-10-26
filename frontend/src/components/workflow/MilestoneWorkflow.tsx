@@ -272,6 +272,17 @@ export function MilestoneWorkflow({ agreement, milestones, onRefresh }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      {milestones.length === 0 && (
+        <div className="rounded-lg border border-dashed border-line p-8 text-center">
+          <Clock className="mx-auto size-8 text-mute" />
+          <h4 className="mt-3 font-medium">Milestones Not Yet Generated</h4>
+          <p className="mt-1 text-sm text-mute">
+            {isClient
+              ? 'Click "Generate Milestone Plan" in the Escrow Manager above to generate and scale the milestone allocations for this agreement.'
+              : 'The client has not generated the milestone deliverables yet. Once generated and funded in escrow, you will be able to submit deliverables here.'}
+          </p>
+        </div>
+      )}
       {milestones.map((m) => {
         const mSubs = m.id ? submissions[m.id] ?? [] : [];
         const mExts = m.id ? extensions[m.id] ?? [] : [];
