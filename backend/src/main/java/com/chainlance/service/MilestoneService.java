@@ -73,21 +73,8 @@ public class MilestoneService {
         List<Milestone> created = new ArrayList<>();
 
         if (planList.isEmpty()) {
-            Milestone m = new Milestone();
-            m.setAgreement(agreement);
-            m.setPosition(0);
-            String title = proposal.getProject().getTitle();
-            m.setDescription(title != null && !title.isBlank() ? title : "Full project delivery");
-            m.setAmountWei(agreedWei);
-            Instant deadline = agreedAt.plus(Duration.ofDays(Math.max(1, totalDays)));
-            m.setOriginalDeadline(deadline);
-            m.setEffectiveDeadline(deadline);
-            m.setWorkStatus(MilestoneWorkStatus.PENDING);
-            m.setChainStatus(MilestoneChainStatus.OPEN);
-            m.setFreelancerPaidWei(BigDecimal.ZERO);
-            m.setClientRefundedWei(BigDecimal.ZERO);
-            created.add(milestones.save(m));
-        } else {
+            planList = buildDefaultPlan(proposal.getProject().getTitle(), agreedInr, totalDays);
+        }
             int n = planList.size();
             if (n > 20) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "TOO_MANY_MILESTONES", "Maximum 20 milestones allowed");
@@ -164,7 +151,6 @@ public class MilestoneService {
 
                 created.add(milestones.save(m));
             }
-        }
 
         return created.stream().map(m -> MilestoneResponse.from(m, converter.inrPerEth())).toList();
     }
@@ -201,5 +187,34 @@ public class MilestoneService {
 
     private static ApiException notFoundMilestone() {
         return new ApiException(HttpStatus.NOT_FOUND, "MILESTONE_NOT_FOUND", "Milestone not found");
+    }
+
+    private List<ProjectMilestonePlan> buildDefaultPlan(String title, BigDecimal agreedInr, int totalDays) {
+        List<ProjectMilestonePlan> defaultPlans = new ArrayList<>();
+        // Big projects (> 75,000 INR or > 30 days): 6 engineering phases
+        // Standard projects: 5 core engineering phases (Contracts, Backend, Frontend, Testing, Deployment)
+        if (agreedInr.compareTo(new BigDecimal("75000")) > 0 || totalDays > 30) {
+            defaultPlans.add(newPlan(0, "Phase 1: Architecture & Technical Specification", 10));
+            defaultPlans.add(newPlan(1, "Phase 2: Solidity Smart Contracts & Protocol Invariants", 20));
+            defaultPlans.add(newPlan(2, "Phase 3: Backend Workflow Engine & Database Services", 25));
+            defaultPlans.add(newPlan(3, "Phase 4: Non-Custodial Frontend & Wallet Integration", 20));
+            defaultPlans.add(newPlan(4, "Phase 5: Unit & End-to-End Integration Testing", 15));
+            defaultPlans.add(newPlan(5, "Phase 6: Final Testnet Verification & Staging Deployment", 10));
+        } else {
+            defaultPlans.add(newPlan(0, "Milestone 1: Smart Contracts & Escrow Protocols", 25));
+            defaultPlans.add(newPlan(1, "Milestone 2: Backend Architecture & Workflow APIs", 20));
+            defaultPlans.add(newPlan(2, "Milestone 3: Frontend Web3 & MetaMask Integration", 25));
+            defaultPlans.add(newPlan(3, "Milestone 4: End-to-End Testing & Verification", 15));
+            defaultPlans.add(newPlan(4, "Milestone 5: Staging & Deployment", 15));
+        }
+        return defaultPlans;
+    }
+
+    private static ProjectMilestonePlan newPlan(int position, String description, int percent) {
+        ProjectMilestonePlan p = new ProjectMilestonePlan();
+        p.setPosition(position);
+        p.setDescription(description);
+        p.setAllocationInr(BigDecimal.valueOf(percent));
+        return p;
     }
 }

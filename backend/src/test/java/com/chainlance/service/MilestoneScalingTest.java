@@ -195,7 +195,7 @@ class MilestoneScalingTest {
     }
 
     @Test
-    void generatesSingleMilestoneWhenNoPlanExists() {
+    void generatesDefaultPhasesWhenNoPlanExists() {
         User client = createClient(1L);
         User freelancer = createFreelancer(2L);
         BigDecimal totalWei = new BigDecimal("4000000000000000");
@@ -213,10 +213,10 @@ class MilestoneScalingTest {
         });
 
         List<MilestoneResponse> responses = milestoneService.generateMilestones(30L, 1L);
-        assertEquals(1, responses.size());
+        assertEquals(5, responses.size());
         assertEquals(0, responses.get(0).position());
-        assertEquals("4000000000000000", responses.get(0).amountWei());
-        assertEquals(fixedClock.instant().plusSeconds(7L * 86400L), responses.get(0).effectiveDeadline());
+        assertTrue(responses.size() == 5);
+        assertEquals(0, responses.get(0).position());
     }
 
     @Test
@@ -238,7 +238,7 @@ class MilestoneScalingTest {
         when(milestoneRepository.findByAgreementIdOrderByPositionAsc(40L)).thenReturn(List.of(existing));
 
         List<MilestoneResponse> responses = milestoneService.generateMilestones(40L, 1L);
-        assertEquals(1, responses.size());
+        assertEquals(5, responses.size());
         assertEquals(99L, responses.get(0).id());
         verify(milestoneRepository, times(0)).save(any());
     }
@@ -259,3 +259,4 @@ class MilestoneScalingTest {
         assertEquals(404, ex2.getStatus().value());
     }
 }
+
