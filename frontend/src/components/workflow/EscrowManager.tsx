@@ -185,6 +185,19 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
     }
 
     try {
+      if (account) {
+        const { provider } = await getSigner(chainConfig?.chainId);
+        const balance = await provider.getBalance(account);
+        const required = BigInt(agreement.totalWei);
+        if (balance < required) {
+          toast.push({
+            message: `Insufficient balance: Your connected wallet has ${weiToEth(balance.toString())} Sepolia ETH, but funding this escrow requires depositing ${weiToEth(agreement.totalWei)} ETH (₹${agreement.priceInr ? formatInr(agreement.priceInr) : ''}). Please add Sepolia ETH to continue.`,
+            tone: 'error',
+          });
+          return;
+        }
+      }
+
       const hash = await fundEscrow(agreement.escrowAddress, agreement.totalWei);
       toast.push({ message: 'Deposit submitted on-chain. Verifying with backend...', tone: 'info' });
       await workflowApi.verifyFunding(agreement.id, hash);

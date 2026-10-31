@@ -101,8 +101,8 @@ function parseContractError(raw: string): string | null {
   if (raw.includes('user rejected') || raw.includes('ACTION_REJECTED')) {
     return 'Transaction was cancelled in MetaMask.';
   }
-  if (raw.includes('insufficient funds')) {
-    return 'Insufficient ETH balance in your MetaMask wallet to cover the transaction and gas fees.';
+  if (raw.includes('insufficient funds') || (raw.includes('missing revert data') && raw.includes('estimateGas'))) {
+    return 'Insufficient ETH balance in your MetaMask wallet to cover the required escrow deposit amount and gas fees. Please add Sepolia ETH to your wallet.';
   }
   return null;
 }
