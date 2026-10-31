@@ -108,10 +108,6 @@ public class ChainVerificationService {
             if (tx.getStatus() == TransactionStatus.CONFIRMED && agreement.getEscrowAddress() != null) {
                 return agreementService.get(agreementId, currentUserId);
             }
-            if (tx.getStatus() == TransactionStatus.FAILED) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "TX_ALREADY_FAILED",
-                        "Transaction was verified as failed: " + tx.getError());
-            }
         }
 
         // Must have milestones generated
@@ -181,11 +177,21 @@ public class ChainVerificationService {
                     "Escrow projectId does not match this agreement's snapshot");
         }
 
-        if (!agreement.getClientWallet().equalsIgnoreCase(event.client())) {
+        String eventClient = event.client() != null ? event.client().trim().toLowerCase() : "";
+        if (agreement.getFreelancerWallet() != null && agreement.getFreelancerWallet().equalsIgnoreCase(eventClient)) {
             recordFailure(normalizedTxHash, TransactionType.CREATE_ESCROW, agreement, null, clientUser, receipt,
-                    "Event client (" + event.client() + ") does not match agreement client (" + agreement.getClientWallet() + ")");
-            throw new ApiException(HttpStatus.BAD_REQUEST, "CLIENT_MISMATCH",
-                    "Escrow client address does not match agreement client wallet");
+                    "Event client (" + eventClient + ") matches freelancer wallet");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "WALLETS_NOT_DISTINCT",
+                    "Client and freelancer wallets must be distinct addresses");
+        }
+        if (chainProperties.adminAddress() != null && chainProperties.adminAddress().equalsIgnoreCase(eventClient)) {
+            recordFailure(normalizedTxHash, TransactionType.CREATE_ESCROW, agreement, null, clientUser, receipt,
+                    "Event client (" + eventClient + ") matches platform admin");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "ADMIN_CONFLICT",
+                    "Escrow client cannot be the platform admin");
+        }
+        if (agreement.getClientWallet() == null || !agreement.getClientWallet().equalsIgnoreCase(eventClient)) {
+            agreement.setClientWallet(eventClient);
         }
 
         if (!agreement.getFreelancerWallet().equalsIgnoreCase(event.freelancer())) {
@@ -253,8 +259,9 @@ public class ChainVerificationService {
         eventData.put("totalAmount", event.totalAmount().toString());
         eventData.put("projectId", event.projectId());
 
-        BlockchainTransaction tx = new BlockchainTransaction();
+        BlockchainTransaction tx = existingTx.orElseGet(BlockchainTransaction::new);
         tx.setTxHash(normalizedTxHash);
+        tx.setError(null);
         tx.setType(TransactionType.CREATE_ESCROW);
         tx.setStatus(TransactionStatus.CONFIRMED);
         tx.setAgreement(savedAgreement);
@@ -506,7 +513,7 @@ public class ChainVerificationService {
 
     private void recordFailure(String txHash, TransactionType type, Agreement agreement, Milestone milestone,
                                User submittedBy, TransactionReceipt receipt, String errorMessage) {
-        BlockchainTransaction tx = new BlockchainTransaction();
+        BlockchainTransaction tx = transactions.findByTxHash(txHash).orElseGet(BlockchainTransaction::new);
         tx.setTxHash(txHash);
         tx.setType(type);
         tx.setStatus(TransactionStatus.FAILED);

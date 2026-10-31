@@ -169,8 +169,16 @@ public class AgreementService {
             throw conflict("ESCROW_ALREADY_REGISTERED", "Wallet cannot be changed after escrow is registered");
         }
         if (!wallets.existsByAddressAndUserId(normalized, userId)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "WALLET_NOT_LINKED",
-                    "Wallet " + normalized + " is not a verified wallet of the current user");
+            if (wallets.findByAddress(normalized).isPresent()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "WALLET_TAKEN",
+                        "This wallet is already linked to another account");
+            }
+            User user = isClient ? proposal.getProject().getClient() : proposal.getFreelancer();
+            WalletAddress wa = new WalletAddress();
+            wa.setUser(user);
+            wa.setAddress(normalized);
+            wa.setVerifiedAt(Instant.now(clock));
+            wallets.save(wa);
         }
         Instant now = Instant.now(clock);
         if (isClient) {

@@ -6,6 +6,7 @@ import { useToast } from '../../hooks/useToast';
 import { useWallet } from '../../hooks/useWallet';
 import { workflowApi, type ChainConfig } from '../../services/workflow.service';
 import type { Agreement, AgreementMilestone } from '../../types/marketplace';
+import { computeOnchainProjectId, getFactoryContract, getSigner } from '../../utils/chain';
 import { formatInr, shortAddress, weiToEth } from '../../utils/format';
 import { Button } from '../ui/Button';
 
@@ -23,6 +24,8 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
   const toast = useToast();
 
   const [linking, setLinking] = useState(false);
+  const [manualTxHash, setManualTxHash] = useState('');
+  const [showManualRegister, setShowManualRegister] = useState(false);
   const isClient = user?.id === agreement.clientId;
   const isFreelancer = user?.id === agreement.freelancerId;
 
@@ -90,19 +93,84 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
 
     try {
       const allocations = milestones.map((m) => m.amountWei ?? '0');
-      const hash = await createEscrow(
-        chainConfig.factoryAddress,
-        agreement.freelancerWallet,
-        agreement.id,
-        agreement.snapshotHash,
-        allocations
-      );
-      toast.push({ message: 'Contract created on-chain. Registering with backend...', tone: 'info' });
+      let hash: string | null = null;
+
+      // 1. Check if escrow was already deployed on-chain for this agreement
+      if (account) {
+        try {
+          const { provider, signer } = await getSigner(chainConfig.chainId);
+          const factory = getFactoryContract(chainConfig.factoryAddress, signer);
+          const projectIdHex = computeOnchainProjectId(agreement.id, agreement.snapshotHash);
+          const existingEscrow = await factory.escrowOf(account, projectIdHex);
+          if (existingEscrow && existingEscrow !== '0x0000000000000000000000000000000000000000') {
+            toast.push({ message: 'Escrow is already deployed on Sepolia! Finding transaction...', tone: 'info' });
+            const filter = factory.filters.EscrowCreated(projectIdHex);
+            const currentBlock = await provider.getBlockNumber();
+            const events = await factory.queryFilter(filter, Math.max(0, currentBlock - 2000));
+            if (events.length > 0 && 'transactionHash' in events[0]) {
+              hash = events[0].transactionHash;
+            }
+          }
+        } catch (checkErr) {
+          console.warn('Could not check factory for existing escrow:', checkErr);
+        }
+      }
+
+      // 2. If not already deployed, deploy via MetaMask
+      if (!hash) {
+        hash = await createEscrow(
+          chainConfig.factoryAddress,
+          agreement.freelancerWallet,
+          agreement.id,
+          agreement.snapshotHash,
+          allocations
+        );
+      }
+
+      toast.push({ message: 'Contract on-chain. Registering with backend...', tone: 'info' });
       await workflowApi.registerEscrow(agreement.id, hash);
       toast.push({ message: 'Escrow registered successfully!', tone: 'success' });
       onRefresh();
     } catch (err) {
-      toast.push({ message: err instanceof Error ? err.message : 'Escrow creation failed', tone: 'error' });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('Escrow Already Exists') || errMsg.includes('0x4e931e3c') || errMsg.includes('EscrowAlreadyExists')) {
+        try {
+          toast.push({ message: 'Escrow already exists on Sepolia. Recovering transaction to register...', tone: 'info' });
+          const { provider, signer } = await getSigner(chainConfig?.chainId);
+          const factory = getFactoryContract(chainConfig.factoryAddress, signer);
+          const projectIdHex = computeOnchainProjectId(agreement.id, agreement.snapshotHash);
+          const filter = factory.filters.EscrowCreated(projectIdHex);
+          const currentBlock = await provider.getBlockNumber();
+          const events = await factory.queryFilter(filter, Math.max(0, currentBlock - 2000));
+          if (events.length > 0 && 'transactionHash' in events[0]) {
+            await workflowApi.registerEscrow(agreement.id, events[0].transactionHash);
+            toast.push({ message: 'Escrow registered successfully!', tone: 'success' });
+            onRefresh();
+            return;
+          }
+        } catch (recErr) {
+          toast.push({ message: recErr instanceof Error ? recErr.message : 'Registration failed', tone: 'error' });
+          return;
+        }
+      }
+      toast.push({ message: errMsg, tone: 'error' });
+    }
+  };
+
+  const handleManualRegister = async () => {
+    if (!manualTxHash.trim()) {
+      toast.push({ message: 'Please enter a transaction hash', tone: 'error' });
+      return;
+    }
+    setLinking(true);
+    try {
+      await workflowApi.registerEscrow(agreement.id, manualTxHash.trim());
+      toast.push({ message: 'Escrow registered successfully!', tone: 'success' });
+      onRefresh();
+    } catch (err) {
+      toast.push({ message: err instanceof Error ? err.message : 'Registration failed', tone: 'error' });
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -176,19 +244,25 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
         </div>
       )}
 
-      {/* Wallet Linking Step */}
-      {!hasLinkedWallet && (isClient || isFreelancer) && (
+      {/* Wallet Linking / Updating Step */}
+      {(!hasLinkedWallet || (account && userWallet && account.toLowerCase() !== userWallet.toLowerCase())) && !agreement.escrowAddress && (isClient || isFreelancer) && (
         <div className="flex flex-col gap-2 rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
-          <p className="text-sm font-medium">Link your wallet for this agreement</p>
+          <p className="text-sm font-medium">
+            {!hasLinkedWallet ? 'Link your wallet for this agreement' : 'Update wallet for this agreement'}
+          </p>
           <p className="text-xs text-mute">
-            {isClient
-              ? 'As the client, this address will own the escrow contract and fund it.'
-              : 'As the freelancer, milestone payouts and settlements will be delivered to this address.'}
+            {hasLinkedWallet ? (
+              <>Currently linked: <span className="font-mono">{shortAddress(userWallet)}</span>. Your active MetaMask wallet is <span className="font-mono">{shortAddress(account)}</span>.</>
+            ) : isClient ? (
+              'As the client, this address will own the escrow contract and fund it.'
+            ) : (
+              'As the freelancer, milestone payouts and settlements will be delivered to this address.'
+            )}
           </p>
           <div className="mt-2 flex items-center gap-3">
             <Button size="sm" onClick={handleLinkCurrentWallet} disabled={linking}>
               <Wallet className="size-4" />
-              {linking ? 'Linking...' : account ? `Link Connected (${shortAddress(account)})` : 'Connect & Link Wallet'}
+              {linking ? 'Updating...' : account ? `Use Connected Wallet (${shortAddress(account)})` : 'Connect & Link Wallet'}
             </Button>
           </div>
         </div>
@@ -260,14 +334,38 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
 
         {/* Step B: Client creates escrow contract */}
         {isClient && !agreement.escrowAddress && milestones.length > 0 && (
-          <Button
-            onClick={handleCreateEscrow}
-            disabled={isPending || !agreement.clientWallet || !agreement.freelancerWallet}
-            size="sm"
-          >
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            {isPending ? 'Deploying Escrow...' : 'Deploy Escrow Contract (MetaMask)'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={handleCreateEscrow}
+              disabled={isPending || !agreement.clientWallet || !agreement.freelancerWallet}
+              size="sm"
+            >
+              {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {isPending ? 'Deploying Escrow...' : 'Deploy Escrow Contract (MetaMask)'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowManualRegister(!showManualRegister)}
+            >
+              Register by Tx Hash
+            </Button>
+          </div>
+        )}
+
+        {isClient && !agreement.escrowAddress && showManualRegister && (
+          <div className="flex w-full items-center gap-2 pt-2">
+            <input
+              type="text"
+              placeholder="0x... (Escrow deployment transaction hash)"
+              value={manualTxHash}
+              onChange={(e) => setManualTxHash(e.target.value)}
+              className="flex-1 rounded-md border border-line bg-surface px-3 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            <Button size="sm" onClick={handleManualRegister} disabled={linking || !manualTxHash.trim()}>
+              {linking ? 'Registering...' : 'Register'}
+            </Button>
+          </div>
         )}
 
         {/* Step C: Client funds escrow contract */}
