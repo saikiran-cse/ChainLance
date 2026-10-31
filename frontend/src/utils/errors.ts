@@ -70,7 +70,49 @@ function fallbackMessage(status?: number): string {
  * the generic NOT_FOUND (see GlobalExceptionHandler), while real "missing record" answers carry specific codes such as
  * USER_NOT_FOUND. That difference is how the UI tells "endpoint not built" from "record does not exist".
  */
+const CONTRACT_CUSTOM_ERRORS: Record<string, string> = {
+  '0x1010d24a': 'Duplicate Party: The connected MetaMask wallet cannot be the platform Admin address, and Client and Freelancer must be separate wallets. Please switch to your Client wallet in MetaMask.',
+  '0x4e931e3c': 'Escrow Already Exists: An escrow contract has already been created for this agreement.',
+  '0xd92e233d': 'Zero Address: A required wallet address is missing or invalid.',
+  '0xf924cbe4': 'Invalid Milestone Count: Must have between 1 and 20 milestones.',
+  '0xba0d87b5': 'Zero Allocation: Every milestone allocation must be greater than 0 wei.',
+  '0x5adf6387': 'Already Funded: This escrow contract is already funded.',
+  '0xdabe2e39': 'Incorrect Funding: Sent ETH amount does not match the exact required total wei.',
+  '0x20dbc874': 'Not Client: Only the client who created this escrow can perform this action.',
+  '0x7bfa4b9f': 'Not Admin: Only the platform admin wallet can perform this resolution.',
+  '0xc8ee2d1d': 'Not Party: Only the client or freelancer of this agreement can perform this action.',
+};
+
+function parseContractError(raw: string): string | null {
+  for (const [selector, friendlyMsg] of Object.entries(CONTRACT_CUSTOM_ERRORS)) {
+    if (raw.toLowerCase().includes(selector.toLowerCase())) {
+      return friendlyMsg;
+    }
+  }
+  if (raw.includes('DuplicateParty')) {
+    return CONTRACT_CUSTOM_ERRORS['0x1010d24a'];
+  }
+  if (raw.includes('EscrowAlreadyExists')) {
+    return CONTRACT_CUSTOM_ERRORS['0x4e931e3c'];
+  }
+  if (raw.includes('IncorrectFunding')) {
+    return CONTRACT_CUSTOM_ERRORS['0xdabe2e39'];
+  }
+  if (raw.includes('user rejected') || raw.includes('ACTION_REJECTED')) {
+    return 'Transaction was cancelled in MetaMask.';
+  }
+  if (raw.includes('insufficient funds')) {
+    return 'Insufficient ETH balance in your MetaMask wallet to cover the transaction and gas fees.';
+  }
+  return null;
+}
+
 export function toAppError(error: unknown): AppError {
+  const rawMsg = error instanceof Error ? error.message : String(error);
+  const contractExplanation = parseContractError(rawMsg);
+  if (contractExplanation) {
+    return new AppError(contractExplanation, { kind: 'unknown', code: 'CONTRACT_REVERT' });
+  }
   if (error instanceof AppError) return error;
 
   if (axios.isAxiosError(error)) {
@@ -82,7 +124,7 @@ export function toAppError(error: unknown): AppError {
       const origin = typeof window === 'undefined' ? 'this origin' : window.location.origin;
       return new AppError(
         timedOut
-          ? 'The request timed out. Please try again.'
+          ? 'The server was waking up from sleep (Render free tier spin-up can take ~60-90s). The server should now be active—please try again.'
           : `Can't reach the ChainLance API at ${env.apiBaseUrl}. Check that the backend is running and that CORS_ALLOWED_ORIGINS includes ${origin}.`,
         { kind: 'network', url, method },
       );

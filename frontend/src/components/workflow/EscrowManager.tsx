@@ -57,6 +57,20 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
   };
 
   const handleCreateEscrow = async () => {
+    if (account && chainConfig?.adminAddress && account.toLowerCase() === chainConfig.adminAddress.toLowerCase()) {
+      toast.push({
+        message: 'Your connected MetaMask wallet is the platform Admin address. The admin cannot act as Client on an escrow. Please switch to your Client wallet in MetaMask.',
+        tone: 'error',
+      });
+      return;
+    }
+    if (account && agreement.freelancerWallet && account.toLowerCase() === agreement.freelancerWallet.toLowerCase()) {
+      toast.push({
+        message: 'Your connected MetaMask wallet is the Freelancer wallet for this agreement. The client and freelancer must be separate wallets.',
+        tone: 'error',
+      });
+      return;
+    }
     if (!chainConfig) {
       toast.push({ message: 'Chain configuration not loaded', tone: 'error' });
       return;
@@ -142,6 +156,14 @@ export function EscrowManager({ agreement, milestones, chainConfig, onRefresh }:
       </div>
 
       {/* Network & Wallet Status */}
+      {account && chainConfig?.adminAddress && account.toLowerCase() === chainConfig.adminAddress.toLowerCase() && (
+        <div className="flex items-start gap-2 rounded-md bg-brick/10 p-3 text-sm text-brick">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            <strong>Connected as Platform Admin ({shortAddress(account)}):</strong> The platform admin arbitrates disputes and cannot create or participate as Client or Freelancer on an escrow contract. Please switch MetaMask to a separate Client wallet.
+          </span>
+        </div>
+      )}
       {!onExpectedChain && account && (
         <div className="flex items-center justify-between rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
           <div className="flex items-center gap-2">

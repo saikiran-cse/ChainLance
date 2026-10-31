@@ -45,4 +45,29 @@ export const ChainLanceFactoryAbi = [
     ],
     anonymous: false,
   },
+  {
+    type: 'error',
+    name: 'DuplicateParty',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'EscrowAlreadyExists',
+    inputs: [{ name: 'projectId', type: 'bytes32' }],
+  },
+  {
+    type: 'error',
+    name: 'ZeroAddress',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'InvalidMilestoneCount',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'ZeroAllocation',
+    inputs: [],
+  },
 ] as const;
